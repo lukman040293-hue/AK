@@ -23,13 +23,16 @@ const DEFAULT_AKTIVITAS = [
 ];
 
 const DEFAULT_TENAGA_KERJA = [
-  { posisi: "Pengawas Kontraktor", jumlah: "" },
-  { posisi: "Pelaksana Kontraktor", jumlah: "" },
-  { posisi: "Petugas K3", jumlah: "" },
-  { posisi: "Mandor", jumlah: "" },
-  { posisi: "Tukang", jumlah: "" },
-  { posisi: "Pekerja", jumlah: "" },
-  { posisi: "Operator Alat", jumlah: "" }
+  { posisi: 'Pengawas Kontraktor', jumlah: '' },
+  { posisi: 'Pelaksana Kontraktor', jumlah: '' },
+  { posisi: 'Petugas K3', jumlah: '' },
+  { posisi: 'Mandor', jumlah: '' },
+  { posisi: 'Tukang', jumlah: '' },
+  { posisi: 'Pekerja', jumlah: '' },
+  { posisi: 'Pengatur Kendaraan (Flagman)', jumlah: '' },
+  { posisi: 'Operator Alat', jumlah: '' },
+  { posisi: 'Site Engineer', jumlah: '' },
+  { posisi: 'Inspector', jumlah: '' }
 ];
 
 // --- HELPER PARSER TEMPLATE DARI COMMAND CENTER ---
@@ -65,9 +68,19 @@ const getInitialFormState = (project, currentDate) => {
     
     // Konversi JSON Array Tenaga Kerja dari template
     if (rawData.tenagaKerja && Array.isArray(rawData.tenagaKerja) && rawData.tenagaKerja.length > 0) {
-      newTenagaKerja = rawData.tenagaKerja
+      const templateTk = rawData.tenagaKerja
         .map(tk => ({ posisi: tk.posisi || '', jumlah: '' }))
         .filter(tk => tk.posisi.trim() !== '');
+
+      // PENTING: Gabungkan template lama dari database dengan daftar default terbaru
+      // agar posisi baru (Flagman, Inspector, dll) selalu tertambahkan otomatis
+      const mergedTk = [...templateTk];
+      DEFAULT_TENAGA_KERJA.forEach(defTk => {
+        if (!mergedTk.find(tk => tk.posisi.toLowerCase() === defTk.posisi.toLowerCase())) {
+           mergedTk.push({ posisi: defTk.posisi, jumlah: '' });
+        }
+      });
+      newTenagaKerja = mergedTk;
     }
   } else if (rawData && Array.isArray(rawData) && rawData.length > 0) {
     newAktivitas = rawData.map(item => ({
@@ -1696,12 +1709,12 @@ export default function EmployeeApp() {
                         value={lapanganCatatan} 
                         onChange={e => setLapanganCatatan(e.target.value)} 
                         placeholder="Tuliskan keterangan lapangan di sini... Jika ada masalah, sertakan kata 'kendala' agar ditandai sebagai isu." 
-                        className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-xs font-bold shadow-inner resize-y leading-relaxed text-slate-800"
+                        className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-xs font-normal shadow-inner resize-y leading-relaxed text-slate-800"
                       ></textarea>
                     </div>
 
-                    <button type="submit" disabled={isProcessing} className="w-full bg-[#131219] text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-[#131219]/30 hover:bg-[#201f29] active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-xs mt-2">
-                      {isProcessing ? <Loader2 size={16} className="animate-spin"/> : <Send size={16}/>}
+                    <button type="submit" disabled={isProcessing} className="w-full bg-[#131219] text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-[#131219]/30 hover:bg-[#201f29] active:scale-[0.98] transition-all flex items-center justify-center gap-2.5 text-xs mt-2">
+                      {isProcessing ? <Loader2 size={18} className="animate-spin"/> : <Send size={18} strokeWidth={2.5} />}
                       {isProcessing ? 'MENGIRIM...' : 'KIRIM'}
                     </button>
                   </form>
