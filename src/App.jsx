@@ -1041,11 +1041,22 @@ export default function EmployeeApp() {
   };
 
   return (
-    <div className="bg-slate-900 min-h-screen flex items-center justify-center sm:p-4" style={{ fontFamily: "'Inter', sans-serif" }}>
+    <div className="bg-slate-900 h-[100dvh] w-full fixed inset-0 flex items-center justify-center sm:p-4 overflow-hidden" style={{ fontFamily: "'Inter', sans-serif" }}>
       <div className="bg-slate-50 w-full h-[100dvh] sm:h-[800px] sm:max-h-[90vh] sm:max-w-[400px] rounded-none sm:rounded-[40px] overflow-hidden shadow-2xl relative flex flex-col border-none sm:border-[6px] sm:border-slate-800">
         
         <style>{`
           @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+          
+          /* Mencegah Pull-to-Refresh dan mengunci scroll body (Full Screen App Feel) */
+          html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            overscroll-behavior-y: none; /* Kunci utama mencegah pull-to-refresh */
+          }
+          
           .custom-scrollbar::-webkit-scrollbar { width: 4px; }
           .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
           .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
