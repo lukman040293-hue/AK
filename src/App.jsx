@@ -1049,14 +1049,14 @@ export default function EmployeeApp() {
                  
                  <form onSubmit={handleLogin} className="w-full space-y-5 shrink-0">
                     <div>
-                       <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wider ml-1 block">ID Karyawan</label>
-                       <input type="text" value={loginForm.id} onChange={e => setLoginForm({...loginForm, id: e.target.value})} placeholder="Contoh: deni" required className="w-full mt-2 p-4 rounded-xl bg-white border border-slate-300 shadow-sm outline-none focus:border-[#131219] focus:ring-2 focus:ring-[#131219]/20 text-sm font-bold text-slate-800 transition-all"/>
+                       <label className="text-[12px] font-bold text-slate-600 uppercase tracking-wider ml-1 block">ID Karyawan</label>
+                       <input type="text" value={loginForm.id} onChange={e => setLoginForm({...loginForm, id: e.target.value})} placeholder="Contoh: deni" required className="w-full mt-2 p-4 rounded-xl bg-white border border-slate-300 shadow-sm outline-none focus:border-[#131219] focus:ring-2 focus:ring-[#131219]/20 text-[16px] font-bold text-slate-800 transition-all"/>
                     </div>
                     <div>
-                       <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wider ml-1 block">PIN/PASSWORD</label>
-                       <input type="password" value={loginForm.pin} onChange={e => setLoginForm({...loginForm, pin: e.target.value})} placeholder="••••••" required className="w-full mt-2 p-4 rounded-xl bg-white border border-slate-300 shadow-sm outline-none focus:border-[#131219] focus:ring-2 focus:ring-[#131219]/20 text-sm font-bold tracking-widest text-slate-800 transition-all"/>
+                       <label className="text-[12px] font-bold text-slate-600 uppercase tracking-wider ml-1 block">PIN/PASSWORD</label>
+                       <input type="password" value={loginForm.pin} onChange={e => setLoginForm({...loginForm, pin: e.target.value})} placeholder="••••••" required className="w-full mt-2 p-4 rounded-xl bg-white border border-slate-300 shadow-sm outline-none focus:border-[#131219] focus:ring-2 focus:ring-[#131219]/20 text-[16px] font-bold tracking-widest text-slate-800 transition-all"/>
                     </div>
-                    <button type="submit" disabled={isProcessing} className="w-full bg-[#131219] text-white py-4 rounded-xl text-sm font-black uppercase mt-8 hover:bg-[#201f29] active:scale-[0.98] transition-all shadow-xl shadow-[#131219]/30 flex justify-center items-center gap-2">
+                    <button type="submit" disabled={isProcessing} className="w-full bg-[#131219] text-white py-4 rounded-xl text-[16px] font-black uppercase mt-8 hover:bg-[#201f29] active:scale-[0.98] transition-all shadow-xl shadow-[#131219]/30 flex justify-center items-center gap-2">
                        {isProcessing ? <Loader2 size={16} className="animate-spin"/> : null}
                        {isProcessing ? 'VERIFIKASI...' : 'LOGIN'}
                     </button>
