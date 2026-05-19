@@ -1035,7 +1035,7 @@ export default function EmployeeApp() {
           <div className="flex-1 flex flex-col items-center justify-center p-4 bg-cover bg-center bg-no-repeat relative overflow-y-auto custom-scrollbar" style={{ backgroundImage: "url('image_f91486.png')", backgroundColor: '#ffffff' }}>
              <div className="absolute inset-0 bg-slate-50/90 backdrop-blur-[3px] z-0"></div>
              
-             <div className="relative z-10 flex flex-col items-center w-full max-w-[320px] sm:max-w-[350px] py-4 my-auto">
+             <div className="relative z-10 flex flex-col items-center w-full px-6 py-4 my-auto sm:max-w-md">
                  
                  <div className="flex flex-col items-center w-full mb-10 sm:mb-14">
                      <div className="w-16 h-16 bg-indigo-50/80 border border-indigo-100 rounded-full flex items-center justify-center mb-3 shadow-xl shadow-indigo-500/10 shrink-0">
@@ -1047,16 +1047,16 @@ export default function EmployeeApp() {
                      <p className="text-slate-500 text-[9px] sm:text-[10px] font-bold tracking-widest uppercase shrink-0">Absensi & Form Input</p>
                  </div>
                  
-                 <form onSubmit={handleLogin} className="w-full bg-slate-200/90 backdrop-blur-xl p-5 sm:p-8 rounded-[2rem] shadow-2xl space-y-5 border border-slate-300/50 shrink-0">
+                 <form onSubmit={handleLogin} className="w-full space-y-5 shrink-0">
                     <div>
-                       <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wider ml-1.5 block">ID Karyawan</label>
-                       <input type="text" value={loginForm.id} onChange={e => setLoginForm({...loginForm, id: e.target.value})} placeholder="Contoh: deni" required className="w-full mt-2 p-3.5 rounded-xl bg-slate-50 border border-slate-300 outline-none focus:border-[#131219] focus:ring-2 focus:ring-[#131219]/20 text-sm font-bold text-slate-800 transition-all"/>
+                       <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wider ml-1 block">ID Karyawan</label>
+                       <input type="text" value={loginForm.id} onChange={e => setLoginForm({...loginForm, id: e.target.value})} placeholder="Contoh: deni" required className="w-full mt-2 p-4 rounded-xl bg-white border border-slate-300 shadow-sm outline-none focus:border-[#131219] focus:ring-2 focus:ring-[#131219]/20 text-sm font-bold text-slate-800 transition-all"/>
                     </div>
                     <div>
-                       <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wider ml-1.5 block">PIN/PASSWORD</label>
-                       <input type="password" value={loginForm.pin} onChange={e => setLoginForm({...loginForm, pin: e.target.value})} placeholder="••••••" required className="w-full mt-2 p-3.5 rounded-xl bg-slate-50 border border-slate-300 outline-none focus:border-[#131219] focus:ring-2 focus:ring-[#131219]/20 text-sm font-bold tracking-widest text-slate-800 transition-all"/>
+                       <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wider ml-1 block">PIN/PASSWORD</label>
+                       <input type="password" value={loginForm.pin} onChange={e => setLoginForm({...loginForm, pin: e.target.value})} placeholder="••••••" required className="w-full mt-2 p-4 rounded-xl bg-white border border-slate-300 shadow-sm outline-none focus:border-[#131219] focus:ring-2 focus:ring-[#131219]/20 text-sm font-bold tracking-widest text-slate-800 transition-all"/>
                     </div>
-                    <button type="submit" disabled={isProcessing} className="w-full bg-[#131219] text-white py-3.5 rounded-xl text-sm font-black uppercase mt-6 hover:bg-[#201f29] active:scale-[0.98] transition-all shadow-xl shadow-[#131219]/30 flex justify-center items-center gap-2">
+                    <button type="submit" disabled={isProcessing} className="w-full bg-[#131219] text-white py-4 rounded-xl text-sm font-black uppercase mt-8 hover:bg-[#201f29] active:scale-[0.98] transition-all shadow-xl shadow-[#131219]/30 flex justify-center items-center gap-2">
                        {isProcessing ? <Loader2 size={16} className="animate-spin"/> : null}
                        {isProcessing ? 'VERIFIKASI...' : 'LOGIN'}
                     </button>
