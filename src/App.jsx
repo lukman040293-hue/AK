@@ -306,6 +306,22 @@ export default function EmployeeApp() {
   const updateShift = (index, field, value) => {
     const newShifts = [...dailyReportForm.shifts];
     newShifts[index][field] = value;
+
+    const shift = newShifts[index];
+    if (field === 'jamMulai' || field === 'jamSelesai' || field === 'tanggalMulai') {
+      if (shift.jamMulai && shift.jamSelesai && shift.tanggalMulai) {
+        // Jika jam selesai lebih kecil dari jam mulai (cth: shift malam 19:00 - 05:00), set tanggal selesai ke H+1
+        if (shift.jamSelesai < shift.jamMulai) {
+          const startDate = new Date(shift.tanggalMulai);
+          startDate.setDate(startDate.getDate() + 1);
+          shift.tanggalSelesai = startDate.toISOString().split('T')[0];
+        } else {
+          // Jika normal, pastikan tanggal selesai sama dengan tanggal mulai
+          shift.tanggalSelesai = shift.tanggalMulai;
+        }
+      }
+    }
+
     setDailyReportForm({ ...dailyReportForm, shifts: newShifts });
   };
   const addShift = () => {
@@ -447,11 +463,11 @@ export default function EmployeeApp() {
     let waktuStrPDF = '-';
     if (reportData.shifts && reportData.shifts.length > 0) {
         waktuStrPDF = reportData.shifts.map((s, i) => {
-            const shiftTitle = reportData.shifts.length > 1 ? `Shift ${i+1}: ` : '';
+            const shiftTitle = `Shift ${i+1}: `;
             if (s.tanggalMulai === s.tanggalSelesai) {
-                return `${shiftTitle}${s.tanggalMulai} ${s.jamMulai} - ${s.jamSelesai}`;
+                return `${shiftTitle}${s.tanggalMulai} (${s.jamMulai} - ${s.jamSelesai})`;
             } else {
-                return `${shiftTitle}${s.tanggalMulai} ${s.jamMulai} - ${s.tanggalSelesai} ${s.jamSelesai}`;
+                return `${shiftTitle}${s.tanggalMulai} (${s.jamMulai}) - ${s.tanggalSelesai} (${s.jamSelesai})`;
             }
         }).join('<br/>');
     }
@@ -803,9 +819,9 @@ export default function EmployeeApp() {
           waktuStr = formState.shifts.map((s, i) => {
               const shiftTitle = `Shift ${i+1}: `;
               if (s.tanggalMulai === s.tanggalSelesai) {
-                  return `${shiftTitle}${s.tanggalMulai} ${s.jamMulai} - ${s.jamSelesai}`;
+                  return `${shiftTitle}${s.tanggalMulai} (${s.jamMulai} - ${s.jamSelesai})`;
               } else {
-                  return `${shiftTitle}${s.tanggalMulai} ${s.jamMulai} - ${s.tanggalSelesai} ${s.jamSelesai}`;
+                  return `${shiftTitle}${s.tanggalMulai} (${s.jamMulai}) - ${s.tanggalSelesai} (${s.jamSelesai})`;
               }
           }).join('\n');
       }
@@ -1001,11 +1017,14 @@ export default function EmployeeApp() {
   };
 
   return (
-    <div className="bg-slate-900 h-[100dvh] w-full fixed inset-0 flex items-center justify-center sm:p-4 overflow-hidden" style={{ fontFamily: "'Inter', sans-serif" }}>
+    <div className="bg-slate-900 h-[100dvh] w-full fixed inset-0 flex items-center justify-center sm:p-4 overflow-hidden" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
       <div className="bg-slate-50 w-full h-[100dvh] sm:h-[800px] sm:max-h-[90vh] sm:max-w-[400px] rounded-none sm:rounded-[40px] overflow-hidden shadow-2xl relative flex flex-col border-none sm:border-[6px] sm:border-slate-800">
         
         <style>{`
-          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+          /* Terapkan font Apple secara paksa ke semua elemen termasuk input, textarea & button */
+          * {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
+          }
           
           /* Kunci utama mencegah pull-to-refresh & zoom */
           html, body {
@@ -1038,25 +1057,25 @@ export default function EmployeeApp() {
              <div className="relative z-10 flex flex-col items-center w-full px-6 py-4 my-auto sm:max-w-md">
                  
                  <div className="flex flex-col items-center w-full mb-10 sm:mb-14">
-                     <div className="w-16 h-16 bg-indigo-50/80 border border-indigo-100 rounded-full flex items-center justify-center mb-3 shadow-xl shadow-indigo-500/10 shrink-0">
-                        <MapPin size={32} className="text-indigo-500" />
+                     <div className="w-20 h-20 bg-indigo-50/80 border border-indigo-100 rounded-full flex items-center justify-center mb-4 shadow-xl shadow-indigo-500/10 shrink-0">
+                        <MapPin size={40} className="text-indigo-500" />
                      </div>
-                     <h1 className="text-2xl sm:text-3xl font-black text-[#131219] mb-1.5 drop-shadow-sm tracking-tight shrink-0">
+                     <h1 className="text-4xl sm:text-5xl font-black text-[#131219] mb-3 drop-shadow-sm tracking-tight shrink-0">
                         Synx<span className="text-indigo-500/90">Mobile</span>
                      </h1>
-                     <p className="text-slate-500 text-[9px] sm:text-[10px] font-bold tracking-widest uppercase shrink-0">Absensi & Form Input</p>
+                     <p className="text-slate-500 text-xs sm:text-sm font-normal tracking-widest uppercase shrink-0">Absensi & Form Input</p>
                  </div>
                  
                  <form onSubmit={handleLogin} className="w-full space-y-5 shrink-0">
                     <div>
-                       <label className="text-[12px] font-bold text-slate-600 uppercase tracking-wider ml-1 block">ID Karyawan</label>
-                       <input type="text" value={loginForm.id} onChange={e => setLoginForm({...loginForm, id: e.target.value})} placeholder="Contoh: deni" required className="w-full mt-2 p-4 rounded-xl bg-white border border-slate-300 shadow-sm outline-none focus:border-[#131219] focus:ring-2 focus:ring-[#131219]/20 text-[16px] font-bold text-slate-800 transition-all"/>
+                       <label className="text-[12px] font-normal text-slate-600 uppercase tracking-wider ml-1 block">ID Karyawan</label>
+                       <input type="text" value={loginForm.id} onChange={e => setLoginForm({...loginForm, id: e.target.value})} placeholder="Contoh: deni" required className="w-full mt-2 p-4 rounded-xl bg-white border border-slate-300 shadow-sm outline-none focus:border-[#131219] focus:ring-2 focus:ring-[#131219]/20 text-[16px] font-normal text-slate-800 transition-all"/>
                     </div>
                     <div>
-                       <label className="text-[12px] font-bold text-slate-600 uppercase tracking-wider ml-1 block">PIN/PASSWORD</label>
-                       <input type="password" value={loginForm.pin} onChange={e => setLoginForm({...loginForm, pin: e.target.value})} placeholder="••••••" required className="w-full mt-2 p-4 rounded-xl bg-white border border-slate-300 shadow-sm outline-none focus:border-[#131219] focus:ring-2 focus:ring-[#131219]/20 text-[16px] font-bold tracking-widest text-slate-800 transition-all"/>
+                       <label className="text-[12px] font-normal text-slate-600 uppercase tracking-wider ml-1 block">PIN/PASSWORD</label>
+                       <input type="password" value={loginForm.pin} onChange={e => setLoginForm({...loginForm, pin: e.target.value})} placeholder="••••••" required className="w-full mt-2 p-4 rounded-xl bg-white border border-slate-300 shadow-sm outline-none focus:border-[#131219] focus:ring-2 focus:ring-[#131219]/20 text-[16px] font-normal tracking-widest text-slate-800 transition-all"/>
                     </div>
-                    <button type="submit" disabled={isProcessing} className="w-full bg-[#131219] text-white py-4 rounded-xl text-[16px] font-black uppercase mt-8 hover:bg-[#201f29] active:scale-[0.98] transition-all shadow-xl shadow-[#131219]/30 flex justify-center items-center gap-2">
+                    <button type="submit" disabled={isProcessing} className="w-full bg-[#131219] text-white py-4 rounded-xl text-[16px] font-normal uppercase mt-8 hover:bg-[#201f29] active:scale-[0.98] transition-all flex justify-center items-center gap-2">
                        {isProcessing ? <Loader2 size={16} className="animate-spin"/> : null}
                        {isProcessing ? 'VERIFIKASI...' : 'LOGIN'}
                     </button>
@@ -1088,21 +1107,21 @@ export default function EmployeeApp() {
                 <button onClick={() => { if(projects.length > 0 && !closestProject) setClosestProject(projects[0]); setView('absen'); }} className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 flex items-center gap-5 hover:border-slate-300 transition-all group active:scale-95">
                    <div className="w-[72px] h-[72px] bg-emerald-50 text-emerald-600 rounded-[1.5rem] flex items-center justify-center group-hover:scale-110 transition-transform shrink-0"><UserCheck strokeWidth={2.5} size={34}/></div>
                    <div className="text-left flex-1">
-                      <h3 className="font-black text-slate-800 text-[22px] tracking-tight">Absensi</h3>
+                      <h3 className="font-normal text-slate-800 text-[22px] tracking-tight">Absensi</h3>
                       <p className="text-[13px] text-slate-500 mt-1 font-medium leading-snug">Catat data absensi harian</p>
                    </div>
                 </button>
                 <button onClick={() => { if(projects.length > 0 && !closestProject) setClosestProject(projects[0]); setView('lapor'); }} className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 flex items-center gap-5 hover:border-slate-300 transition-all group active:scale-95">
                    <div className="w-[72px] h-[72px] bg-blue-50 text-blue-600 rounded-[1.5rem] flex items-center justify-center group-hover:scale-110 transition-transform shrink-0"><FileText strokeWidth={2.5} size={34}/></div>
                    <div className="text-left flex-1">
-                      <h3 className="font-black text-slate-800 text-[22px] tracking-tight">Buat Laporan</h3>
+                      <h3 className="font-normal text-slate-800 text-[22px] tracking-tight">Buat Laporan</h3>
                       <p className="text-[13px] text-slate-500 mt-1 font-medium leading-snug">Laporan harian & lapor cepat lapangan</p>
                    </div>
                 </button>
                 <button onClick={() => { if(projects.length > 0 && !closestProject) setClosestProject(projects[0]); setView('survei'); }} className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 flex items-center gap-5 hover:border-slate-300 transition-all group active:scale-95">
                    <div className="w-[72px] h-[72px] bg-indigo-50 text-indigo-600 rounded-[1.5rem] flex items-center justify-center group-hover:scale-110 transition-transform shrink-0"><Map strokeWidth={2.5} size={34}/></div>
                    <div className="text-left flex-1">
-                      <h3 className="font-black text-slate-800 text-[22px] tracking-tight">Input Survei</h3>
+                      <h3 className="font-normal text-slate-800 text-[22px] tracking-tight">Input Survei</h3>
                       <p className="text-[13px] text-slate-500 mt-1 font-medium leading-snug">Catat rute & data ukur lapangan</p>
                    </div>
                 </button>
@@ -1215,16 +1234,16 @@ export default function EmployeeApp() {
                    
                    {attendanceMode === 'Hadir' ? (
                       <div className="animate-in fade-in slide-in-from-bottom-2">
-                         <h3 className="text-slate-800 mb-4 text-center mt-2">Info Posisi</h3>
+                         <h3 className="text-slate-800 mb-4 text-center mt-2 font-normal">Info Posisi</h3>
                          <div className="space-y-3 mb-6">
-                            <button onClick={() => setLocationType('Kantor')} className={`w-full p-4 rounded-2xl border-2 font-bold text-sm transition-all flex items-center justify-center gap-3 ${locationType === 'Kantor' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 bg-white text-slate-400 hover:border-slate-300'}`}><Clock size={24} /> Kantor</button>
-                            <button onClick={() => setLocationType('Proyek')} className={`w-full p-4 rounded-2xl border-2 font-bold text-sm transition-all flex items-center justify-center gap-3 ${locationType === 'Proyek' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 bg-white text-slate-400 hover:border-slate-300'}`}><MapPin size={24} /> Lokasi</button>
+                            <button onClick={() => setLocationType('Kantor')} className={`w-full p-4 rounded-2xl border-2 font-normal text-sm transition-all flex items-center justify-center gap-3 ${locationType === 'Kantor' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 bg-white text-slate-400 hover:border-slate-300'}`}><Clock size={24} /> Kantor</button>
+                            <button onClick={() => setLocationType('Proyek')} className={`w-full p-4 rounded-2xl border-2 font-normal text-sm transition-all flex items-center justify-center gap-3 ${locationType === 'Proyek' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 bg-white text-slate-400 hover:border-slate-300'}`}><MapPin size={24} /> Lokasi</button>
                          </div>
                          
                          {locationType === 'Proyek' && (
                             <div className="animate-in fade-in slide-in-from-top-2 border-t border-slate-100 pt-6">
-                               <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-2">Pilih Nama Proyek</label>
-                               <select className="w-full p-3.5 rounded-xl bg-slate-50 border border-slate-200 outline-none text-sm font-bold focus:border-emerald-500" value={closestProject?.id || ''} onChange={(e) => setClosestProject(projects.find(p => p.id === e.target.value))}>
+                               <label className="text-[10px] font-normal text-slate-500 uppercase ml-1 block mb-2">Pilih Nama Proyek</label>
+                               <select className="w-full p-3.5 rounded-xl bg-slate-50 border border-slate-200 outline-none text-sm font-normal focus:border-emerald-500" value={closestProject?.id || ''} onChange={(e) => setClosestProject(projects.find(p => p.id === e.target.value))}>
                                   {projects.map(p => <option key={p.id} value={p.id}>{p.pekerjaan}</option>)}
                                </select>
                             </div>
@@ -1232,11 +1251,11 @@ export default function EmployeeApp() {
                       </div>
                    ) : (
                       <div className="animate-in fade-in slide-in-from-bottom-2">
-                         <h3 className="text-slate-800 mb-4 text-center mt-2">Form Ketidakhadiran</h3>
+                         <h3 className="text-slate-800 mb-4 text-center mt-2 font-normal">Form Ketidakhadiran</h3>
                          <div>
-                            <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-2">Keterangan / Alasan (Wajib)</label>
+                            <label className="text-[10px] font-normal text-slate-500 uppercase ml-1 block mb-2">Keterangan / Alasan (Wajib)</label>
                             <textarea
-                              className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 outline-none text-sm font-bold focus:border-blue-500 focus:ring-2 focus:ring-blue-100 resize-none placeholder:text-slate-400/80"
+                              className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 outline-none text-sm font-normal focus:border-blue-500 focus:ring-2 focus:ring-blue-100 resize-none placeholder:text-slate-400/80"
                               rows="5"
                               placeholder="Tuliskan alasan atau keperluan secara detail di sini..."
                               value={absenCatatan}
@@ -1400,14 +1419,14 @@ export default function EmployeeApp() {
                   <div className="bg-white p-4 md:p-5 rounded-2xl border border-slate-200 w-full shadow-sm">
                     <h4 className="text-sm font-black uppercase text-slate-700 mb-3 border-b border-slate-100 pb-2 tracking-widest">B. Kondisi Cuaca</h4>
                     
-                    <div className="grid grid-cols-2 gap-2 w-full">
+                    <div className="flex flex-col gap-2 w-full">
                       {Object.keys(dailyReportForm.cuaca).map(jam => (
-                        <div key={jam} className="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-slate-50 shadow-sm focus-within:ring-2 focus-within:ring-blue-100 focus-within:border-blue-400 transition-all">
-                          <label className="w-1/2 p-2 bg-slate-100/80 text-[9px] font-bold text-slate-600 border-r border-slate-200 text-center truncate">{jam}</label>
+                        <div key={jam} className="flex flex-row items-center justify-between border border-slate-200 rounded-lg overflow-hidden bg-slate-50 shadow-sm focus-within:ring-2 focus-within:ring-blue-100 focus-within:border-blue-400 transition-all">
+                          <label className="w-1/2 p-3 bg-slate-100/80 text-xs font-bold text-slate-700 border-r border-slate-200 text-left pl-4 truncate">{jam}</label>
                           <select 
                             value={dailyReportForm.cuaca[jam]} 
                             onChange={e => setDailyReportForm(p => ({ ...p, cuaca: { ...p.cuaca, [jam]: e.target.value } }))} 
-                            className="w-1/2 p-2 bg-white outline-none text-[9px] font-bold text-slate-800 text-center hover:bg-blue-50 cursor-pointer"
+                            className="w-1/2 p-3 bg-white outline-none text-xs font-bold text-slate-800 text-center hover:bg-blue-50 cursor-pointer"
                           >
                             <option value="Cerah">Cerah</option>
                             <option value="Gerimis">Gerimis</option>
@@ -1428,7 +1447,7 @@ export default function EmployeeApp() {
                           <div key={i} className="flex flex-col border-b border-slate-200 p-4 w-full gap-3 relative">
                             <div className="flex justify-between items-start">
                                <div className="flex-1 mr-3">
-                                  <label className="text-[10px] font-bold text-slate-600 uppercase block mb-1.5">Nama Pekerjaan</label>
+                                  <label className="text-[10px] font-normal text-slate-600 uppercase block mb-1.5">Nama Pekerjaan</label>
                                   <textarea 
                                     rows="2"
                                     className="w-full p-2.5 text-xs font-bold text-slate-800 bg-white border border-slate-200 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 shadow-sm resize-y leading-relaxed" 
@@ -1490,7 +1509,7 @@ export default function EmployeeApp() {
                           <div key={i} className="flex flex-col border-b border-slate-200 p-4 w-full gap-3 relative">
                             <div className="flex justify-between items-start">
                                <div className="flex-1 mr-3">
-                                  <label className="text-[10px] font-bold text-slate-600 uppercase block mb-1.5">Posisi / Jabatan</label>
+                                  <label className="text-[10px] font-normal text-slate-600 uppercase block mb-1.5">Posisi / Jabatan</label>
                                   <input 
                                      type="text" 
                                      placeholder="Contoh: Tukang Kayu..." 
@@ -1556,7 +1575,7 @@ export default function EmployeeApp() {
                   <div className="bg-white p-4 md:p-5 rounded-2xl border border-slate-200 space-y-4 w-full shadow-sm">
                     <div>
                       <label className="text-[10px] font-bold block mb-1.5 uppercase text-slate-600">E. Catatan / Kendala / Saran</label>
-                      <textarea rows="3" value={dailyReportForm.catatan} onChange={e => setDailyReportForm(p => ({ ...p, catatan: e.target.value }))} placeholder="Tuliskan catatan harian atau hambatan..." className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-xs font-bold shadow-inner resize-y leading-relaxed text-slate-800"></textarea>
+                      <textarea rows="3" value={dailyReportForm.catatan} onChange={e => setDailyReportForm(p => ({ ...p, catatan: e.target.value }))} placeholder="Tuliskan catatan harian atau hambatan..." className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-xs font-normal shadow-inner resize-y leading-relaxed text-slate-800"></textarea>
                     </div>
                     <div>
                       <label className="text-[10px] font-bold block mb-1.5 uppercase text-slate-600">F. Dokumentasi Lampiran (Maks. 4)</label>
