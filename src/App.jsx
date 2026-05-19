@@ -83,7 +83,7 @@ const getInitialFormState = (project, currentDate) => {
 
 // --- HELPER COMPONENT (SURVEI) ---
 const SurveyInputRow = ({ label, children }) => (
-  <div>
+  <div className="w-full">
     <label className="text-[10px] font-bold block mb-1.5 uppercase text-slate-500">{label}</label>
     {children}
   </div>
@@ -101,9 +101,9 @@ export default function EmployeeApp() {
   // State untuk Absensi & Proyek
   const [closestProject, setClosestProject] = useState(null);
   const [locationType, setLocationType] = useState('Proyek'); 
-  const [attendanceMode, setAttendanceMode] = useState('Hadir'); // STATE BARU: Pemisah mode Hadir & Izin/Sakit
+  const [attendanceMode, setAttendanceMode] = useState('Hadir'); 
   const [absenReceipt, setAbsenReceipt] = useState(null);
-  const [absenCatatan, setAbsenCatatan] = useState(''); // STATE BARU: Untuk alasan Izin/Sakit
+  const [absenCatatan, setAbsenCatatan] = useState(''); 
 
   // State untuk Form Laporan Harian Lengkap
   const [dailyReportForm, setDailyReportForm] = useState({
@@ -123,11 +123,11 @@ export default function EmployeeApp() {
   });
   const [repFiles, setRepFiles] = useState([]);
 
-  // STATE BARU: Konfirmasi Hapus Baris di Form Laporan
+  // State Konfirmasi Hapus Baris di Form Laporan
   const [confirmDeleteFormItem, setConfirmDeleteFormItem] = useState(null);
 
-  // STATE BARU: Lapor Lapangan (Cepat)
-  const [laporTab, setLaporTab] = useState('harian'); // 'harian' | 'lapangan'
+  // State Lapor Lapangan (Cepat)
+  const [laporTab, setLaporTab] = useState('harian'); 
   const [lapanganCatatan, setLapanganCatatan] = useState('');
   const [lapanganFiles, setLapanganFiles] = useState([]);
 
@@ -143,8 +143,16 @@ export default function EmployeeApp() {
   // --- STATE UNTUK LOGIN ---
   const [loginForm, setLoginForm] = useState({ id: '', pin: '' });
 
-  // --- EFEK PERTAMA: LOAD SUPABASE & PDF CDN ---
+  // --- EFEK PERTAMA: LOAD SUPABASE, PDF CDN, DAN FIX VIEWPORT MOBILE ---
   useEffect(() => {
+    // 0. FIX VIEWPORT UNTUK MENGHINDARI TAMPILAN MENGECIL DI HP
+    if (!document.querySelector('meta[name="viewport"]')) {
+      const meta = document.createElement('meta');
+      meta.name = 'viewport';
+      meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+      document.head.appendChild(meta);
+    }
+
     // 1. Supabase Init
     if (!window.supabase) {
       const script = document.createElement('script');
@@ -200,12 +208,11 @@ export default function EmployeeApp() {
     }
   };
 
-  // --- EFEK SAAT PROYEK DIPILIH ATAU MASUK HALAMAN LAPOR (Fetch Database Langsung) ---
+  // --- EFEK SAAT PROYEK DIPILIH ATAU MASUK HALAMAN LAPOR ---
   useEffect(() => {
     if (closestProject && supabase) {
       const fetchTemplateData = async () => {
         try {
-          // 1. Fetch template terbaru langsung dari database projects
           const { data, error } = await supabase
             .from('projects')
             .select('report_template_data')
@@ -217,7 +224,6 @@ export default function EmployeeApp() {
             templateData = data.report_template_data;
           }
 
-          // 2. Ambil data dengan helper fungsi (sudah otomatis ekstrak dari JSON)
           const initialData = getInitialFormState({ ...closestProject, report_template_data: templateData }, dailyReportForm.tanggal);
           
           setDailyReportForm(prev => ({
@@ -231,8 +237,6 @@ export default function EmployeeApp() {
           console.error("Gagal mengambil template laporan:", err);
         }
       };
-
-      // Jalankan fungsi hanya jika sedang di menu form laporan, atau saat pindah/memilih proyek
       fetchTemplateData();
     }
   }, [closestProject?.id, view === 'lapor', supabase]);
@@ -299,7 +303,6 @@ export default function EmployeeApp() {
     }
   }, [JSON.stringify(dailyReportForm.shifts)]); 
 
-  // --- FUNGSI HELPER UNTUK SHIFT ---
   const updateShift = (index, field, value) => {
     const newShifts = [...dailyReportForm.shifts];
     newShifts[index][field] = value;
@@ -311,12 +314,7 @@ export default function EmployeeApp() {
       shifts: [...dailyReportForm.shifts, { id: Date.now(), tanggalMulai: dailyReportForm.tanggal, jamMulai: '08:00', tanggalSelesai: dailyReportForm.tanggal, jamSelesai: '17:00' }] 
     });
   };
-  const removeShift = (index) => {
-    const newShifts = dailyReportForm.shifts.filter((_, i) => i !== index);
-    setDailyReportForm({ ...dailyReportForm, shifts: newShifts });
-  };
 
-  // --- FUNGSI HELPER UNTUK DYNAMIC AKTIVITAS ROW ---
   const addAktivitasRow = () => {
     setDailyReportForm(prev => ({
       ...prev,
@@ -324,27 +322,10 @@ export default function EmployeeApp() {
     }));
   };
 
-  const removeAktivitasRow = (index) => {
-    const updatedAktivitas = dailyReportForm.aktivitas.filter((_, i) => i !== index);
-    setDailyReportForm(prev => ({
-      ...prev,
-      aktivitas: updatedAktivitas
-    }));
-  };
-
-  // --- FUNGSI HELPER UNTUK DYNAMIC TENAGA KERJA ROW ---
   const addTenagaKerjaRow = () => {
     setDailyReportForm(prev => ({
       ...prev,
       tenagaKerja: [...prev.tenagaKerja, { posisi: '', jumlah: '' }]
-    }));
-  };
-
-  const removeTenagaKerjaRow = (index) => {
-    const updated = dailyReportForm.tenagaKerja.filter((_, i) => i !== index);
-    setDailyReportForm(prev => ({
-      ...prev,
-      tenagaKerja: updated
     }));
   };
 
@@ -353,7 +334,6 @@ export default function EmployeeApp() {
     setTimeout(() => setNotification(null), 4000);
   };
 
-  // FUNGSI BARU: Mengeksekusi penghapusan baris di form laporan
   const executeDeleteFormItem = () => {
     if (!confirmDeleteFormItem) return;
     const { type, index } = confirmDeleteFormItem;
@@ -372,7 +352,6 @@ export default function EmployeeApp() {
     setConfirmDeleteFormItem(null);
   };
 
-  // --- LOGIKA LOGIN (KONEKSI KE DATABASE SUPABASE) ---
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsProcessing(true);
@@ -384,7 +363,6 @@ export default function EmployeeApp() {
       let { data, error } = await supabase.from('karyawan').select('*');
 
       if (error) {
-        console.error("Error DB:", error);
         showMsg('Gagal membaca tabel karyawan!', 'error');
         setIsProcessing(false);
         return;
@@ -411,7 +389,7 @@ export default function EmployeeApp() {
       const dbPin = foundUser.pin || foundUser.password || foundUser.kata_sandi || foundUser.sandi || foundUser.pass;
 
       if (dbPin === undefined || dbPin === null) {
-        showMsg('Kolom PIN/Password tidak ditemukan di tabel database Anda!', 'error');
+        showMsg('Kolom PIN/Password tidak ditemukan di tabel database!', 'error');
         setIsProcessing(false);
         return;
       }
@@ -428,14 +406,12 @@ export default function EmployeeApp() {
         showMsg('PIN atau Password yang dimasukkan salah!', 'error');
       }
     } catch (error) {
-      console.error("Login error:", error);
       showMsg('Terjadi kesalahan jaringan!', 'error');
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // --- FUNGSI MENDAPATKAN GPS UNTUK SURVEI ---
   const getUnifiedGPS = (type) => {
     if (!navigator.geolocation) {
       showMsg('Geolokasi tidak didukung perangkat ini.', 'error');
@@ -460,7 +436,6 @@ export default function EmployeeApp() {
     );
   };
 
-  // --- FUNGSI GENERATE PDF LAPORAN HARIAN ---
   const generateDailyReportReceipt = async (reportData, projectData, reporterName) => {
     if (!window.jspdf || !window.html2canvas) {
       console.warn("Library PDF belum siap, silakan coba lagi.");
@@ -500,7 +475,6 @@ export default function EmployeeApp() {
       </tr>`;
     }).join('');
 
-    // 3. FORMAT KONDISI CUACA (3 KOLOM)
     const cuacaKeys = Object.keys(reportData.cuaca || {});
     let cuacaRows3Col = '';
     
@@ -519,7 +493,6 @@ export default function EmployeeApp() {
       </tr>`;
     }
     
-    // UPDATE: PEMBUATAN TABEL TENAGA KERJA PDF (Dari Array Dinamis)
     const tkTerisi = Array.isArray(reportData.tenagaKerja) 
        ? reportData.tenagaKerja.filter(tk => tk.posisi && tk.posisi.trim() !== '') 
        : [];
@@ -649,25 +622,21 @@ export default function EmployeeApp() {
       
       pdf.save(`Laporan_Harian_${reporterName.replace(/\s+/g, '_')}_${reportData.tanggal}.pdf`);
     } catch (err) {
-      console.error("Gagal cetak PDF:", err);
       showMsg("Laporan terkirim, namun gagal mengunduh PDF.", "error");
     } finally {
       document.body.removeChild(container);
     }
   };
 
-  // --- LOGIKA ABSENSI ---
   const handleAbsenSubmit = async (e, typeSubmit) => {
     e.preventDefault();
     
-    // VALIDASI KHUSUS IZIN / SAKIT
     if (typeSubmit === 'Izin' || typeSubmit === 'Sakit') {
         if (!absenCatatan.trim()) {
             showMsg(`Mohon isi kolom keterangan untuk ${typeSubmit} terlebih dahulu`, 'error');
             return;
         }
     } else {
-        // VALIDASI MASUK / PULANG
         if (locationType === 'Proyek' && !closestProject) {
             showMsg('Pilih proyek terlebih dahulu', 'error'); 
             return;
@@ -698,13 +667,11 @@ export default function EmployeeApp() {
       let finalStatus = '';
 
       if (typeSubmit === 'Izin' || typeSubmit === 'Sakit') {
-          // JIKA IZIN / SAKIT
           locTypeLabel = typeSubmit;
           locName = 'Tidak Hadir';
           statusKehadiran = typeSubmit;
-          finalStatus = `${typeSubmit} - ${absenCatatan}`; // Simpan alasan di status
+          finalStatus = `${typeSubmit} - ${absenCatatan}`; 
       } else {
-          // JIKA MASUK / PULANG
           locName = locationType === 'Kantor' ? 'Kantor' : closestProject.pekerjaan;
           locTypeLabel = locationType === 'Kantor' ? 'Kantor' : 'Proyek';
           
@@ -788,7 +755,7 @@ export default function EmployeeApp() {
           absenType: typeSubmit, 
           status: statusKehadiran
       });
-      setAbsenCatatan(''); // Reset keterangan
+      setAbsenCatatan(''); 
       setView('absen_success');
     } catch (e) {
       showMsg('Gagal absen: ' + e.message, 'error');
@@ -797,7 +764,6 @@ export default function EmployeeApp() {
     }
   };
 
-  // --- LOGIKA LAPORAN HARIAN ---
   const handleReportSubmit = async (e) => {
     e.preventDefault();
     if (!closestProject) { showMsg('Pilih proyek terlebih dahulu', 'error'); return; }
@@ -825,7 +791,6 @@ export default function EmployeeApp() {
           return `- ${a.nama} : Kemarin=${a.kemarin || 0}, Hari Ini=${a.hariIni || 0}, Total=${tot} ${a.satuan || ''}`;
         }).join('\n');
 
-      // UPDATE: LOG TEXT TENAGA KERJA FORMAT BARU
       const tkStr = Array.isArray(formState.tenagaKerja)
         ? formState.tenagaKerja
             .filter(tk => tk.posisi && tk.posisi.trim() !== '')
@@ -833,7 +798,6 @@ export default function EmployeeApp() {
             .join('\n')
         : '-';
 
-      // UPDATE: LOG TEXT WAKTU/SHIFT FORMAT BARU
       let waktuStr = '';
       if (formState.shifts && formState.shifts.length > 0) {
           waktuStr = formState.shifts.map((s, i) => {
@@ -846,7 +810,6 @@ export default function EmployeeApp() {
           }).join('\n');
       }
 
-      // UPDATE: FORMAT TEXT CONTENT 100% SESUAI COMMAND CENTER
       const reportContent = `📋 LAPORAN HARIAN\nTanggal: ${formState.tanggal}\nLokasi: ${formState.lokasi || '-'}\nWaktu:\n${waktuStr}\n\n🌤️ KONDISI CUACA:\n${cuacaStr}\n\n👷 TENAGA KERJA:\n${tkStr || '-'}\n\n🚧 AKTIVITAS PEKERJAAN:\n${aktivStr || '-'}\n\n📝 CATATAN / KENDALA / SARAN:\n${formState.catatan || '-'}`;
 
       const isProblem = !!formState.catatan && formState.catatan.toLowerCase().includes('kendala');
@@ -864,7 +827,6 @@ export default function EmployeeApp() {
       if (error) throw error;
       
       try {
-         // MENYIMPAN TEMPLATE DENGAN FORMAT JSON BARU KE COMMAND CENTER
          const templateBaru = {
              lokasi: formState.lokasi,
              shifts: formState.shifts.map(s => ({ id: s.id, tanggalMulai: s.tanggalMulai, jamMulai: s.jamMulai, tanggalSelesai: s.tanggalSelesai, jamSelesai: s.jamSelesai })),
@@ -885,7 +847,7 @@ export default function EmployeeApp() {
             closestProject.report_template_data = templateBaru; 
          }
       } catch (errTemplate) {
-         console.warn("Gagal memperbarui report_template_data: ", errTemplate);
+         console.warn("Gagal memperbarui template: ", errTemplate);
       }
       
       showMsg('Laporan Harian Berhasil Terkirim! Mengunduh PDF...', 'success');
@@ -916,7 +878,6 @@ export default function EmployeeApp() {
     }
   };
 
-  // --- LOGIKA LAPOR LAPANGAN (CEPAT) ---
   const handleLaporLapanganSubmit = async (e) => {
     e.preventDefault();
     if (!closestProject) { showMsg('Pilih proyek terlebih dahulu', 'error'); return; }
@@ -963,7 +924,6 @@ export default function EmployeeApp() {
     }
   };
 
-  // --- LOGIKA UNTUK INPUT SURVEI ---
   const handleUnifiedSubmit = async (e) => {
     e.preventDefault();
     if (!closestProject) { showMsg('Pilih proyek terlebih dahulu', 'error'); return; }
@@ -1047,14 +1007,15 @@ export default function EmployeeApp() {
         <style>{`
           @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
           
-          /* Mencegah Pull-to-Refresh dan mengunci scroll body (Full Screen App Feel) */
+          /* Kunci utama mencegah pull-to-refresh & zoom */
           html, body {
             margin: 0;
             padding: 0;
             width: 100%;
             height: 100%;
             overflow: hidden;
-            overscroll-behavior-y: none; /* Kunci utama mencegah pull-to-refresh */
+            overscroll-behavior-y: none;
+            touch-action: pan-y;
           }
           
           .custom-scrollbar::-webkit-scrollbar { width: 4px; }
@@ -1076,7 +1037,6 @@ export default function EmployeeApp() {
              
              <div className="relative z-10 flex flex-col items-center w-full max-w-[320px] sm:max-w-[350px] py-4 my-auto">
                  
-                 {/* Wrapper Logo (Ikon & Teks) - Diberi margin bottom lebih besar agar posisinya naik */}
                  <div className="flex flex-col items-center w-full mb-10 sm:mb-14">
                      <div className="w-16 h-16 bg-indigo-50/80 border border-indigo-100 rounded-full flex items-center justify-center mb-3 shadow-xl shadow-indigo-500/10 shrink-0">
                         <MapPin size={32} className="text-indigo-500" />
@@ -1150,7 +1110,7 @@ export default function EmployeeApp() {
           </div>
         )}
 
-        {/* --- VIEW: INPUT SURVEI --- */}
+        {/* --- VIEW: INPUT SURVEI (DIPERBAIKI OVERFLOW & MIN-W) --- */}
         {view === 'survei' && (
           <div className="flex-1 flex flex-col bg-white relative h-full overflow-hidden">
              <div className="p-5 border-b border-slate-200 bg-white flex items-center gap-4 shrink-0 shadow-sm z-10">
@@ -1168,50 +1128,53 @@ export default function EmployeeApp() {
                 </div>
              </div>
              
-             <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar bg-white pb-10">
-                <form onSubmit={handleUnifiedSubmit} className="space-y-4 text-left">
+             {/* Tambahkan overflow-x-hidden untuk memastikan tidak ada elemen form yang membuat layar melar ke kanan */}
+             <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 custom-scrollbar bg-white pb-10">
+                <form onSubmit={handleUnifiedSubmit} className="space-y-4 text-left w-full">
                   <SurveyInputRow label="Tanggal">
-                    <input type="date" value={uForm.tanggal} onChange={e => setUForm(p => ({ ...p, tanggal: e.target.value }))} className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white transition-colors" />
+                    <input type="date" value={uForm.tanggal} onChange={e => setUForm(p => ({ ...p, tanggal: e.target.value }))} className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white transition-colors" />
                   </SurveyInputRow>
                   
                   <SurveyInputRow label="Nama Jln/Gg./Blok">
-                    <textarea rows="2" value={uForm.namaSegmen} onChange={e => setUForm(p => ({ ...p, namaSegmen: e.target.value }))} placeholder="Misal: Jl. Mawar / Segmen 1" className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white transition-colors resize-none leading-relaxed"></textarea>
+                    <textarea rows="2" value={uForm.namaSegmen} onChange={e => setUForm(p => ({ ...p, namaSegmen: e.target.value }))} placeholder="Misal: Jl. Mawar / Segmen 1" className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white transition-colors resize-none leading-relaxed"></textarea>
                   </SurveyInputRow>
                   
+                  {/* Gunakan min-w-0 pada input flex agar tidak overflow */}
                   <SurveyInputRow label="Titik Awal">
-                    <div className="flex gap-2">
-                      <input type="text" placeholder="Lat" value={uForm.startLat} onChange={e => setUForm(p => ({ ...p, startLat: e.target.value }))} className="flex-1 p-3 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white" />
-                      <input type="text" placeholder="Lng" value={uForm.startLng} onChange={e => setUForm(p => ({ ...p, startLng: e.target.value }))} className="flex-1 p-3 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white" />
-                      <button type="button" onClick={() => getUnifiedGPS('start')} className="px-4 bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors font-bold rounded-xl text-[10px] shadow-sm">GPS</button>
+                    <div className="flex gap-2 w-full">
+                      <input type="text" placeholder="Lat" value={uForm.startLat} onChange={e => setUForm(p => ({ ...p, startLat: e.target.value }))} className="flex-1 min-w-0 p-2.5 text-xs rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white" />
+                      <input type="text" placeholder="Lng" value={uForm.startLng} onChange={e => setUForm(p => ({ ...p, startLng: e.target.value }))} className="flex-1 min-w-0 p-2.5 text-xs rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white" />
+                      <button type="button" onClick={() => getUnifiedGPS('start')} className="shrink-0 px-3 bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors font-bold rounded-xl text-[10px] shadow-sm">GPS</button>
                     </div>
                   </SurveyInputRow>
                   
+                  {/* Gunakan min-w-0 pada input flex agar tidak overflow */}
                   <SurveyInputRow label="Titik Akhir">
-                    <div className="flex gap-2">
-                      <input type="text" placeholder="Lat" value={uForm.endLat} onChange={e => setUForm(p => ({ ...p, endLat: e.target.value }))} className="flex-1 p-3 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white" />
-                      <input type="text" placeholder="Lng" value={uForm.endLng} onChange={e => setUForm(p => ({ ...p, endLng: e.target.value }))} className="flex-1 p-3 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white" />
-                      <button type="button" onClick={() => getUnifiedGPS('end')} className="px-4 bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors font-bold rounded-xl text-[10px] shadow-sm">GPS</button>
+                    <div className="flex gap-2 w-full">
+                      <input type="text" placeholder="Lat" value={uForm.endLat} onChange={e => setUForm(p => ({ ...p, endLat: e.target.value }))} className="flex-1 min-w-0 p-2.5 text-xs rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white" />
+                      <input type="text" placeholder="Lng" value={uForm.endLng} onChange={e => setUForm(p => ({ ...p, endLng: e.target.value }))} className="flex-1 min-w-0 p-2.5 text-xs rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white" />
+                      <button type="button" onClick={() => getUnifiedGPS('end')} className="shrink-0 px-3 bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors font-bold rounded-xl text-[10px] shadow-sm">GPS</button>
                     </div>
                   </SurveyInputRow>
                   
                   <SurveyInputRow label="Panjang Eks.">
-                    <input type="text" value={uForm.panjang} onChange={e => setUForm(p => ({ ...p, panjang: e.target.value }))} className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white" />
+                    <input type="text" value={uForm.panjang} onChange={e => setUForm(p => ({ ...p, panjang: e.target.value }))} className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white" />
                   </SurveyInputRow>
                   
                   <SurveyInputRow label="Lebar Eks.">
-                    <input type="text" value={uForm.lebar} onChange={e => setUForm(p => ({ ...p, lebar: e.target.value }))} className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white" />
+                    <input type="text" value={uForm.lebar} onChange={e => setUForm(p => ({ ...p, lebar: e.target.value }))} className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white" />
                   </SurveyInputRow>
                   
                   <SurveyInputRow label="Jenis/Model Eks.">
-                    <input type="text" value={uForm.jenis_model_awal} onChange={e => setUForm(p => ({ ...p, jenis_model_awal: e.target.value }))} className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white" />
+                    <input type="text" value={uForm.jenis_model_awal} onChange={e => setUForm(p => ({ ...p, jenis_model_awal: e.target.value }))} className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white" />
                   </SurveyInputRow>
                   
                   <SurveyInputRow label="Upload Data Ukur (CSV)">
-                    <input type="file" accept=".csv" onChange={e => setUDataUkur(e.target.files[0])} className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 text-xs file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-600 hover:file:bg-blue-100" />
+                    <input type="file" accept=".csv" onChange={e => setUDataUkur(e.target.files[0])} className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-600 hover:file:bg-blue-100" />
                   </SurveyInputRow>
                   
                   <SurveyInputRow label="Catatan - Kendala - Kondisi">
-                    <textarea rows="3" value={uForm.noteDesc} onChange={e => setUForm(p => ({ ...p, noteDesc: e.target.value }))} className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white"></textarea>
+                    <textarea rows="3" value={uForm.noteDesc} onChange={e => setUForm(p => ({ ...p, noteDesc: e.target.value }))} className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white"></textarea>
                   </SurveyInputRow>
                   
                   <SurveyInputRow label="Dokumentasi Eks.">
@@ -1219,7 +1182,7 @@ export default function EmployeeApp() {
                       const files = Array.from(e.target.files);
                       if (files.length > 5) { showMsg("Maksimal 5 file.", "error"); setUMedia(files.slice(0, 5)); } 
                       else { setUMedia(files); }
-                    }} className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 text-xs file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-600 hover:file:bg-blue-100" />
+                    }} className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-600 hover:file:bg-blue-100" />
                     {uMedia.length > 0 && <div className="text-[10px] mt-1.5 text-blue-600 font-bold">{uMedia.length} file siap diunggah</div>}
                   </SurveyInputRow>
                   
@@ -1380,10 +1343,10 @@ export default function EmployeeApp() {
              </div>
 
              {/* Form Area - Scrollable */}
-             <div className="flex-1 overflow-y-auto p-3 md:p-5 custom-scrollbar bg-slate-50/50">
+             <div className="flex-1 overflow-y-auto p-3 md:p-5 custom-scrollbar bg-slate-50/50 overflow-x-hidden">
                 
                 {laporTab === 'harian' && (
-                <form onSubmit={handleReportSubmit} className="space-y-4 text-left pb-10 animate-in fade-in slide-in-from-bottom-2">
+                <form onSubmit={handleReportSubmit} className="space-y-4 text-left pb-10 animate-in fade-in slide-in-from-bottom-2 w-full">
                   
                   {/* A. JAM KERJA & LOKASI */}
                   <div className="bg-white p-4 md:p-5 rounded-2xl border border-slate-200 space-y-4 w-full shadow-sm">
@@ -1489,21 +1452,21 @@ export default function EmployeeApp() {
                                   </button>
                                </div>
                             </div>
-                            <div className="flex items-center flex-1 gap-2 justify-between">
-                              <div className="flex-1">
-                                <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1 text-center">Kemarin</label>
+                            <div className="flex items-center flex-1 gap-2 justify-between w-full">
+                              <div className="flex-1 min-w-0">
+                                <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1 text-center truncate">Kemarin</label>
                                 <input type="number" placeholder="0" className="w-full p-2 rounded-md border border-slate-200 bg-white text-xs font-bold text-center text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 shadow-sm" value={akt.kemarin} onChange={e => { const n = [...dailyReportForm.aktivitas]; n[i].kemarin = e.target.value; setDailyReportForm({ ...dailyReportForm, aktivitas: n }); }} />
                               </div>
-                              <div className="flex-1">
-                                <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1 text-center">Hari Ini</label>
+                              <div className="flex-1 min-w-0">
+                                <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1 text-center truncate">Hari Ini</label>
                                 <input type="number" placeholder="0" className="w-full p-2 rounded-md border border-slate-200 bg-white text-xs font-bold text-center text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 shadow-sm" value={akt.hariIni} onChange={e => { const n = [...dailyReportForm.aktivitas]; n[i].hariIni = e.target.value; setDailyReportForm({ ...dailyReportForm, aktivitas: n }); }} />
                               </div>
-                              <div className="flex-1">
-                                <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1 text-center">Total</label>
+                              <div className="flex-1 min-w-0">
+                                <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1 text-center truncate">Total</label>
                                 <input type="number" className="w-full p-2 rounded-md border border-slate-200 bg-slate-100 text-blue-600 font-black text-xs text-center cursor-not-allowed shadow-inner" value={total > 0 ? total : ''} readOnly />
                               </div>
-                              <div className="flex-1">
-                                <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1 text-center">Satuan</label>
+                              <div className="flex-1 min-w-0">
+                                <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1 text-center truncate">Satuan</label>
                                 <input type="text" className="w-full p-2 rounded-md border border-slate-200 bg-white text-xs font-bold text-center text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 shadow-sm" value={akt.satuan} onChange={e => { const n = [...dailyReportForm.aktivitas]; n[i].satuan = e.target.value; setDailyReportForm({ ...dailyReportForm, aktivitas: n }); }} placeholder="m³" />
                               </div>
                             </div>
@@ -1566,7 +1529,7 @@ export default function EmployeeApp() {
                                    setDailyReportForm({...dailyReportForm, tenagaKerja: n}); 
                                  }} 
                                />
-                               <span className="text-xs font-bold text-slate-500 w-12">Orang</span>
+                               <span className="text-xs font-bold text-slate-500 w-12 shrink-0">Orang</span>
                             </div>
                           </div>
                         ))
@@ -1657,8 +1620,8 @@ export default function EmployeeApp() {
                 )}
 
                 {laporTab === 'lapangan' && (
-                  <form onSubmit={handleLaporLapanganSubmit} className="space-y-4 text-left pb-10 animate-in fade-in slide-in-from-bottom-2">
-                    <div className="bg-white p-4 md:p-5 rounded-2xl border border-slate-200 shadow-sm">
+                  <form onSubmit={handleLaporLapanganSubmit} className="space-y-4 text-left pb-10 animate-in fade-in slide-in-from-bottom-2 w-full">
+                    <div className="bg-white p-4 md:p-5 rounded-2xl border border-slate-200 shadow-sm w-full">
                       <h4 className="text-sm font-black uppercase text-slate-700 mb-3 border-b border-slate-100 pb-2 tracking-widest flex items-center gap-2">
                          <Camera size={16} className="text-emerald-500" /> Dokumentasi Lapangan
                       </h4>
@@ -1705,7 +1668,7 @@ export default function EmployeeApp() {
                       </div>
                     </div>
 
-                    <div className="bg-white p-4 md:p-5 rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="bg-white p-4 md:p-5 rounded-2xl border border-slate-200 shadow-sm w-full">
                       <h4 className="text-sm font-black uppercase text-slate-700 mb-3 border-b border-slate-100 pb-2 tracking-widest flex items-center gap-2">
                          <FileText size={16} className="text-emerald-500" /> Catatan / Keterangan
                       </h4>
