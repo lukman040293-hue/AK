@@ -1084,26 +1084,26 @@ export default function EmployeeApp() {
                 </div>
              </div>
 
-             <div className="p-6 flex-1 flex flex-col gap-4 mt-2 relative z-20 custom-scrollbar overflow-y-auto">
-                <button onClick={() => { if(projects.length > 0 && !closestProject) setClosestProject(projects[0]); setView('absen'); }} className="bg-white p-5 rounded-3xl shadow-sm border border-slate-200 flex items-center gap-4 hover:border-slate-400 transition-all group active:scale-95">
-                   <div className="w-14 h-14 bg-[#131219]/5 text-emerald-500 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><UserCheck size={28}/></div>
+             <div className="p-6 flex-1 flex flex-col gap-5 mt-2 relative z-20 custom-scrollbar overflow-y-auto">
+                <button onClick={() => { if(projects.length > 0 && !closestProject) setClosestProject(projects[0]); setView('absen'); }} className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 flex items-center gap-5 hover:border-slate-300 transition-all group active:scale-95">
+                   <div className="w-[72px] h-[72px] bg-emerald-50 text-emerald-600 rounded-[1.5rem] flex items-center justify-center group-hover:scale-110 transition-transform shrink-0"><UserCheck strokeWidth={2.5} size={34}/></div>
                    <div className="text-left flex-1">
-                      <h3 className="font-black text-slate-800 text-lg">Absensi</h3>
-                      <p className="text-[10px] text-slate-500 mt-0.5">Catat data absensi harian</p>
+                      <h3 className="font-black text-slate-800 text-[22px] tracking-tight">Absensi</h3>
+                      <p className="text-[13px] text-slate-500 mt-1 font-medium leading-snug">Catat data absensi harian</p>
                    </div>
                 </button>
-                <button onClick={() => { if(projects.length > 0 && !closestProject) setClosestProject(projects[0]); setView('lapor'); }} className="bg-white p-5 rounded-3xl shadow-sm border border-slate-200 flex items-center gap-4 hover:border-slate-400 transition-all group active:scale-95">
-                   <div className="w-14 h-14 bg-[#131219]/5 text-blue-500 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><FileText size={28}/></div>
+                <button onClick={() => { if(projects.length > 0 && !closestProject) setClosestProject(projects[0]); setView('lapor'); }} className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 flex items-center gap-5 hover:border-slate-300 transition-all group active:scale-95">
+                   <div className="w-[72px] h-[72px] bg-blue-50 text-blue-600 rounded-[1.5rem] flex items-center justify-center group-hover:scale-110 transition-transform shrink-0"><FileText strokeWidth={2.5} size={34}/></div>
                    <div className="text-left flex-1">
-                      <h3 className="font-black text-slate-800 text-lg">Buat Laporan</h3>
-                      <p className="text-[10px] text-slate-500 mt-0.5">Laporan harian & lapor cepat lapangan</p>
+                      <h3 className="font-black text-slate-800 text-[22px] tracking-tight">Buat Laporan</h3>
+                      <p className="text-[13px] text-slate-500 mt-1 font-medium leading-snug">Laporan harian & lapor cepat lapangan</p>
                    </div>
                 </button>
-                <button onClick={() => { if(projects.length > 0 && !closestProject) setClosestProject(projects[0]); setView('survei'); }} className="bg-white p-5 rounded-3xl shadow-sm border border-slate-200 flex items-center gap-4 hover:border-slate-400 transition-all group active:scale-95">
-                   <div className="w-14 h-14 bg-[#131219]/5 text-indigo-500 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><Map size={28}/></div>
+                <button onClick={() => { if(projects.length > 0 && !closestProject) setClosestProject(projects[0]); setView('survei'); }} className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 flex items-center gap-5 hover:border-slate-300 transition-all group active:scale-95">
+                   <div className="w-[72px] h-[72px] bg-indigo-50 text-indigo-600 rounded-[1.5rem] flex items-center justify-center group-hover:scale-110 transition-transform shrink-0"><Map strokeWidth={2.5} size={34}/></div>
                    <div className="text-left flex-1">
-                      <h3 className="font-black text-slate-800 text-lg">Input Survei</h3>
-                      <p className="text-[10px] text-slate-500 mt-0.5">Catat rute & data ukur lapangan</p>
+                      <h3 className="font-black text-slate-800 text-[22px] tracking-tight">Input Survei</h3>
+                      <p className="text-[13px] text-slate-500 mt-1 font-medium leading-snug">Catat rute & data ukur lapangan</p>
                    </div>
                 </button>
              </div>
