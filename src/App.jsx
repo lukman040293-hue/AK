@@ -1700,9 +1700,9 @@ export default function EmployeeApp() {
                       ></textarea>
                     </div>
 
-                    <button type="submit" disabled={isProcessing} className="w-full bg-emerald-500 text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-emerald-500/30 hover:bg-emerald-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-xs mt-2">
+                    <button type="submit" disabled={isProcessing} className="w-full bg-[#131219] text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-[#131219]/30 hover:bg-[#201f29] active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-xs mt-2">
                       {isProcessing ? <Loader2 size={16} className="animate-spin"/> : <Send size={16}/>}
-                      {isProcessing ? 'MENGIRIM...' : 'KIRIM LAPOR LAPANGAN'}
+                      {isProcessing ? 'MENGIRIM...' : 'KIRIM'}
                     </button>
                   </form>
                 )}
