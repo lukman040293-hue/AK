@@ -1047,7 +1047,7 @@ export default function EmployeeApp() {
                      <p className="text-slate-500 text-[9px] sm:text-[10px] font-bold tracking-widest uppercase shrink-0">Absensi & Form Input</p>
                  </div>
                  
-                 <form onSubmit={handleLogin} className="w-full bg-slate-200/90 backdrop-blur-xl p-6 sm:p-8 rounded-[2rem] shadow-2xl space-y-5 border border-slate-300/50 shrink-0">
+                 <form onSubmit={handleLogin} className="w-full bg-slate-200/90 backdrop-blur-xl p-5 sm:p-8 rounded-[2rem] shadow-2xl space-y-5 border border-slate-300/50 shrink-0">
                     <div>
                        <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wider ml-1.5 block">ID Karyawan</label>
                        <input type="text" value={loginForm.id} onChange={e => setLoginForm({...loginForm, id: e.target.value})} placeholder="Contoh: deni" required className="w-full mt-2 p-3.5 rounded-xl bg-slate-50 border border-slate-300 outline-none focus:border-[#131219] focus:ring-2 focus:ring-[#131219]/20 text-sm font-bold text-slate-800 transition-all"/>
