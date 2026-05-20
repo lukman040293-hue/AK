@@ -254,7 +254,7 @@ export default function EmployeeApp() {
     }
   }, [closestProject?.id, view === 'lapor', supabase]);
 
-  // --- EFEK AUTO-GENERATE CUACA PER 30 MENIT BERDASARKAN SHIFT ---
+  // --- EFEK AUTO-GENERATE CUACA PER 1 JAM BERDASARKAN SHIFT ---
   useEffect(() => {
     if (!dailyReportForm.shifts || dailyReportForm.shifts.length === 0) return;
 
@@ -282,7 +282,8 @@ export default function EmployeeApp() {
       let current = new Date(start);
       while (current < end && slotsCount < maxSlots) {
         let next = new Date(current);
-        next.setMinutes(current.getMinutes() + 30); 
+        // DIUBAH: Interval cuaca menjadi kelipatan 1 Jam (60 menit) agar sesuai standar Command Center
+        next.setMinutes(current.getMinutes() + 60); 
         if (next > end) next = new Date(end);
 
         timeSlots.push({ start: new Date(current), end: new Date(next) });
@@ -475,12 +476,11 @@ export default function EmployeeApp() {
 
     let waktuStrPDF = '-';
     if (reportData.shifts && reportData.shifts.length > 0) {
-        waktuStrPDF = reportData.shifts.map((s, i) => {
-            const shiftTitle = `Shift ${i+1}: `;
+        waktuStrPDF = reportData.shifts.map((s) => {
             if (s.tanggalMulai === s.tanggalSelesai) {
-                return `${shiftTitle}${s.tanggalMulai} (${s.jamMulai} - ${s.jamSelesai})`;
+                return `${s.tanggalMulai} (${s.jamMulai} - ${s.jamSelesai})`;
             } else {
-                return `${shiftTitle}${s.tanggalMulai} (${s.jamMulai}) - ${s.tanggalSelesai} (${s.jamSelesai})`;
+                return `${s.tanggalMulai} (${s.jamMulai}) - ${s.tanggalSelesai} (${s.jamSelesai})`;
             }
         }).join('<br/>');
     }
@@ -566,12 +566,12 @@ export default function EmployeeApp() {
             <td style="width: 15%; font-weight: bold;">Pelapor</td><td style="width: 35%;">: ${reporterName}</td>
           </tr>
           <tr>
-            <td style="font-weight: bold; vertical-align: top;">Waktu Kerja</td><td style="vertical-align: top;">: <br/>${waktuStrPDF}</td>
+            <td style="font-weight: bold; vertical-align: top;">Waktu Kerja</td><td style="vertical-align: top;">: ${waktuStrPDF}</td>
             <td style="font-weight: bold; vertical-align: top;">Lokasi</td><td style="vertical-align: top;">: ${reportData.lokasi}</td>
           </tr>
         </table>
 
-        <h3 style="font-size: 14px; background-color: #f8fafc; padding: 6px 10px; margin: 15px 0 10px 0; border-left: 4px solid #3b82f6;">A. KONDISI CUACA</h3>
+        <h3 style="font-size: 14px; background-color: #f8fafc; padding: 6px 10px; margin: 15px 0 10px 0; border-left: 4px solid #3b82f6;">B. KONDISI CUACA</h3>
         <table style="width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 15px;">
           <tr style="background-color: #e2e8f0;">
             <th style="padding: 4px; border: 1px solid #cbd5e1; width: 16.6%;">Waktu (Jam)</th>
@@ -584,7 +584,7 @@ export default function EmployeeApp() {
           ${cuacaRows3Col}
         </table>
 
-        <h3 style="font-size: 14px; background-color: #f8fafc; padding: 6px 10px; margin: 15px 0 10px 0; border-left: 4px solid #3b82f6;">B. AKTIVITAS PEKERJAAN</h3>
+        <h3 style="font-size: 14px; background-color: #f8fafc; padding: 6px 10px; margin: 15px 0 10px 0; border-left: 4px solid #3b82f6;">C. AKTIVITAS PEKERJAAN</h3>
         <table style="width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 15px;">
           <tr style="background-color: #e2e8f0;">
             <th style="padding: 6px; border: 1px solid #cbd5e1; width: 5%;">No</th>
@@ -597,7 +597,7 @@ export default function EmployeeApp() {
           ${aktivitasRows || `<tr><td colspan="6" style="padding: 10px; border: 1px solid #cbd5e1; text-align: center; color: #64748b;">Tidak ada aktivitas pekerjaan yang dilaporkan</td></tr>`}
         </table>
 
-        <h3 style="font-size: 14px; background-color: #f8fafc; padding: 6px 10px; margin: 15px 0 10px 0; border-left: 4px solid #3b82f6;">C. JUMLAH TENAGA KERJA</h3>
+        <h3 style="font-size: 14px; background-color: #f8fafc; padding: 6px 10px; margin: 15px 0 10px 0; border-left: 4px solid #3b82f6;">D. JUMLAH TENAGA KERJA</h3>
         <table style="width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 15px;">
           <tr style="background-color: #e2e8f0;">
             <th style="padding: 4px; border: 1px solid #cbd5e1; width: 35%;">Posisi / Jabatan</th>
@@ -608,7 +608,7 @@ export default function EmployeeApp() {
           ${tkRows2Col || `<tr><td colspan="4" style="padding: 10px; border: 1px solid #cbd5e1; text-align: center; color: #64748b;">Belum ada daftar tenaga kerja</td></tr>`}
         </table>
 
-        <h3 style="font-size: 14px; background-color: #f8fafc; padding: 6px 10px; margin: 15px 0 10px 0; border-left: 4px solid #3b82f6;">D. CATATAN / KENDALA</h3>
+        <h3 style="font-size: 14px; background-color: #f8fafc; padding: 6px 10px; margin: 15px 0 10px 0; border-left: 4px solid #3b82f6;">E. CATATAN / KENDALA</h3>
         <div style="border: 1px solid #cbd5e1; padding: 15px; font-size: 12px; min-height: 60px; background-color: #f8fafc;">
           ${reportData.catatan ? reportData.catatan.replace(/\n/g, '<br/>') : '<i>Tidak ada catatan atau kendala.</i>'}
         </div>
@@ -829,12 +829,11 @@ export default function EmployeeApp() {
 
       let waktuStr = '';
       if (formState.shifts && formState.shifts.length > 0) {
-          waktuStr = formState.shifts.map((s, i) => {
-              const shiftTitle = `Shift ${i+1}: `;
+          waktuStr = formState.shifts.map((s) => {
               if (s.tanggalMulai === s.tanggalSelesai) {
-                  return `${shiftTitle}${s.tanggalMulai} (${s.jamMulai} - ${s.jamSelesai})`;
+                  return `${s.tanggalMulai} (${s.jamMulai} - ${s.jamSelesai})`;
               } else {
-                  return `${shiftTitle}${s.tanggalMulai} (${s.jamMulai}) - ${s.tanggalSelesai} (${s.jamSelesai})`;
+                  return `${s.tanggalMulai} (${s.jamMulai}) - ${s.tanggalSelesai} (${s.jamSelesai})`;
               }
           }).join('\n');
       }
@@ -1074,7 +1073,7 @@ export default function EmployeeApp() {
                         <MapPin size={40} className="text-indigo-500" />
                      </div>
                      <h1 className="text-4xl sm:text-5xl font-black text-[#131219] mb-3 drop-shadow-sm tracking-tight shrink-0">
-                        Synx<span className="text-indigo-500/90">Mobile</span>
+                        ak<span className="text-indigo-500/90">md</span>
                      </h1>
                      <p className="text-slate-500 text-xs sm:text-sm font-normal tracking-widest uppercase shrink-0">Absensi & Form Input</p>
                  </div>
@@ -1109,7 +1108,7 @@ export default function EmployeeApp() {
                          <h2 className="text-base font-black truncate max-w-[200px] text-[#131219]">{user.name}</h2>
                       </div>
                    </div>
-                   <button onClick={() => setView('login')} className="px-4 py-2 bg-gradient-to-r from-[#131219] to-slate-700 backdrop-blur-sm rounded-xl hover:from-[#0a090d] hover:to-slate-800 active:scale-95 transition-all flex items-center gap-2 text-xs font-bold shadow-md shadow-[#131219]/20 border border-slate-700/50 text-white">
+                   <button onClick={() => setView('login')} className="px-4 py-2 bg-[#131219] rounded-xl hover:bg-[#201f29] active:scale-95 transition-all flex items-center gap-2 text-xs font-bold shadow-md shadow-[#131219]/20 text-white">
                       <LogOut size={14}/>
                       LOGOUT
                    </button>
