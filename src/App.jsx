@@ -173,13 +173,13 @@ export default function EmployeeApp() {
       script.onload = () => {
         const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         setSupabase(client);
-        fetchProjects(client);
+        // fetchProjects TIDAK DILAKUKAN DI SINI KARENA TERHALANG RLS (Belum Login)
       };
       document.head.appendChild(script);
     } else {
       const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       setSupabase(client);
-      fetchProjects(client);
+      // fetchProjects TIDAK DILAKUKAN DI SINI KARENA TERHALANG RLS (Belum Login)
     }
 
     // 2. Load jsPDF & html2canvas untuk Cetak PDF
@@ -198,23 +198,20 @@ export default function EmployeeApp() {
 
   const fetchProjects = async (client) => {
     try {
-      let { data, error } = await client.from('projects').select('*');
+      let { data, error } = await client.from('projects').select('id, pekerjaan, report_template_data');
       
       if (error) throw error;
 
       if (!data || data.length === 0) {
-         data = [{ 
-            id: 'dummy-123', pekerjaan: 'Proyek Uji Coba (Dummy)', start_lat: -6.2, start_lng: 106.8, 
-            item_utama_data: [{pekerjaan: 'Galian Tanah', satuan: 'm3'}] 
-         }];
+         // Hapus inject data dummy, biarkan kosong agar dipaksa ambil dari database asli
+         setProjects([]);
       } else {
          data = data.map(p => ({
              ...p,
              pekerjaan: p.pekerjaan || p.nama_proyek || p.nama || p.title || p.name || 'Proyek Tanpa Nama'
          }));
+         setProjects(data);
       }
-      
-      setProjects(data);
     } catch (e) {
       console.error("Fetch projects error:", e);
       showMsg('Gagal memuat daftar proyek dari server', 'error');
@@ -382,6 +379,15 @@ export default function EmployeeApp() {
     setConfirmDeleteFormItem(null);
   };
 
+  const handleLogout = async () => {
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
+    setUser(null);
+    setProjects([]);
+    setView('login');
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsProcessing(true);
@@ -389,52 +395,53 @@ export default function EmployeeApp() {
     try {
       const inputId = loginForm.id.trim().toLowerCase();
       const inputPin = loginForm.pin.trim();
+      
+      // 1. Format ID menjadi Email Dummy untuk Supabase Auth
+      const emailDummy = `${inputId}@karyawan.com`;
 
-      let { data, error } = await supabase.from('karyawan').select('*');
-
-      if (error) {
-        showMsg('Gagal membaca tabel karyawan!', 'error');
-        setIsProcessing(false);
-        return;
-      }
-
-      if (!data || data.length === 0) {
-         showMsg('Tabel karyawan masih kosong!', 'error');
-         setIsProcessing(false);
-         return;
-      }
-
-      const foundUser = data.find(emp => {
-        return Object.values(emp).some(val => 
-          val !== null && val !== undefined && String(val).toLowerCase() === inputId
-        );
+      // 2. Autentikasi dengan Supabase Auth (Wajib untuk menembus RLS)
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: emailDummy,
+        password: inputPin
       });
 
-      if (!foundUser) {
-        showMsg('ID/Nama tidak terdaftar di database!', 'error');
+      if (authError) {
+        showMsg('Login Gagal: ID Karyawan atau PIN salah!', 'error');
         setIsProcessing(false);
         return;
       }
 
-      const dbPin = foundUser.pin || foundUser.password || foundUser.kata_sandi || foundUser.sandi || foundUser.pass;
-
-      if (dbPin === undefined || dbPin === null) {
-        showMsg('Kolom PIN/Password tidak ditemukan di tabel database!', 'error');
-        setIsProcessing(false);
-        return;
-      }
-
-      if (String(dbPin) === inputPin) {
-        setUser({
-          name: foundUser.nama || foundUser.nama_lengkap || foundUser.name || foundUser.id_karyawan || 'Karyawan',
-          role: foundUser.jabatan || foundUser.role || foundUser.posisi || 'Pelaksana',
-          id: inputId
+      // 3. Setelah Auth berhasil, ambil data Profil Lengkap dari tabel karyawan
+      let userName = inputId;
+      let userRole = 'Pelaksana';
+      
+      const { data: empData, error: empError } = await supabase.from('karyawan').select('*');
+      
+      if (!empError && empData && empData.length > 0) {
+        const foundUser = empData.find(emp => {
+          return Object.values(emp).some(val => 
+            val !== null && val !== undefined && String(val).toLowerCase() === inputId
+          );
         });
-        setView('home');
-        showMsg(`Selamat bekerja!`, 'success');
-      } else {
-        showMsg('PIN atau Password yang dimasukkan salah!', 'error');
+
+        if (foundUser) {
+          userName = foundUser.nama || foundUser.nama_lengkap || foundUser.name || foundUser.id_karyawan || inputId;
+          userRole = foundUser.jabatan || foundUser.role || foundUser.posisi || 'Pelaksana';
+        }
       }
+
+      setUser({
+        name: userName,
+        role: userRole,
+        id: inputId,
+        uid: authData.user.id
+      });
+      
+      // 4. Load daftar proyek sekarang (karena RLS Auth sudah terbuka)
+      await fetchProjects(supabase);
+
+      setView('home');
+      showMsg('Selamat bekerja!', 'success');
     } catch (error) {
       showMsg('Terjadi kesalahan jaringan!', 'error');
     } finally {
@@ -995,14 +1002,16 @@ export default function EmployeeApp() {
         dilaporkan_oleh: user.name
       };
 
-      const { data: projData, error: fetchErr } = await supabase.from('projects').select('rute').eq('id', closestProject.id).single();
-      if (fetchErr) throw fetchErr;
-
-      const currentRute = projData.rute || [];
-      const updatedRute = [...currentRute, newSegment];
-
-      const { error: updateErr } = await supabase.from('projects').update({ rute: updatedRute }).eq('id', closestProject.id);
-      if (updateErr) throw updateErr;
+      try {
+        const { data: projData, error: fetchErr } = await supabase.from('projects').select('rute').eq('id', closestProject.id).single();
+        if (!fetchErr && projData) {
+          const currentRute = projData.rute || [];
+          const updatedRute = [...currentRute, newSegment];
+          await supabase.from('projects').update({ rute: updatedRute }).eq('id', closestProject.id);
+        }
+      } catch (err) {
+        console.warn("Kolom 'rute' tidak ditemukan di database. Penyimpanan spesifik rute dilewati.", err);
+      }
 
       const deskripsi = `[LAPORAN SURVEI]\nNama Segmen: ${uForm.namaSegmen}\nPanjang: ${uForm.panjang}\nLebar: ${uForm.lebar}\nJenis: ${uForm.jenis_model_awal}\nCatatan: ${uForm.noteDesc}`;
       const { error: repErr } = await supabase.from('field_reports').insert([{
@@ -1108,7 +1117,7 @@ export default function EmployeeApp() {
                          <h2 className="text-base font-black truncate max-w-[200px] text-[#131219]">{user.name}</h2>
                       </div>
                    </div>
-                   <button onClick={() => setView('login')} className="px-4 py-2 bg-[#131219] rounded-xl hover:bg-[#201f29] active:scale-95 transition-all flex items-center gap-2 text-xs font-bold shadow-md shadow-[#131219]/20 text-white">
+                   <button onClick={handleLogout} className="px-4 py-2 bg-[#131219] rounded-xl hover:bg-[#201f29] active:scale-95 transition-all flex items-center gap-2 text-xs font-bold shadow-md shadow-[#131219]/20 text-white">
                       <LogOut size={14}/>
                       LOGOUT
                    </button>
@@ -1116,21 +1125,21 @@ export default function EmployeeApp() {
              </div>
 
              <div className="p-6 flex-1 flex flex-col gap-5 mt-2 relative z-20 custom-scrollbar overflow-y-auto">
-                <button onClick={() => { if(projects.length > 0 && !closestProject) setClosestProject(projects[0]); setView('absen'); }} className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 flex items-center gap-5 hover:border-slate-300 transition-all group active:scale-95">
+                <button onClick={() => setView('absen')} className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 flex items-center gap-5 hover:border-slate-300 transition-all group active:scale-95">
                    <div className="w-[72px] h-[72px] bg-emerald-50 text-emerald-600 rounded-[1.5rem] flex items-center justify-center group-hover:scale-110 transition-transform shrink-0"><UserCheck strokeWidth={2.5} size={34}/></div>
                    <div className="text-left flex-1">
                       <h3 className="font-normal text-slate-800 text-[22px] tracking-tight">Absensi</h3>
                       <p className="text-[13px] text-slate-500 mt-1 font-medium leading-snug">Catat data absensi harian</p>
                    </div>
                 </button>
-                <button onClick={() => { if(projects.length > 0 && !closestProject) setClosestProject(projects[0]); setView('lapor'); }} className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 flex items-center gap-5 hover:border-slate-300 transition-all group active:scale-95">
+                <button onClick={() => setView('lapor')} className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 flex items-center gap-5 hover:border-slate-300 transition-all group active:scale-95">
                    <div className="w-[72px] h-[72px] bg-blue-50 text-blue-600 rounded-[1.5rem] flex items-center justify-center group-hover:scale-110 transition-transform shrink-0"><FileText strokeWidth={2.5} size={34}/></div>
                    <div className="text-left flex-1">
                       <h3 className="font-normal text-slate-800 text-[22px] tracking-tight">Buat Laporan</h3>
                       <p className="text-[13px] text-slate-500 mt-1 font-medium leading-snug">Laporan harian & lapor cepat lapangan</p>
                    </div>
                 </button>
-                <button onClick={() => { if(projects.length > 0 && !closestProject) setClosestProject(projects[0]); setView('survei'); }} className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 flex items-center gap-5 hover:border-slate-300 transition-all group active:scale-95">
+                <button onClick={() => setView('survei')} className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 flex items-center gap-5 hover:border-slate-300 transition-all group active:scale-95">
                    <div className="w-[72px] h-[72px] bg-indigo-50 text-indigo-600 rounded-[1.5rem] flex items-center justify-center group-hover:scale-110 transition-transform shrink-0"><Map strokeWidth={2.5} size={34}/></div>
                    <div className="text-left flex-1">
                       <h3 className="font-normal text-slate-800 text-[22px] tracking-tight">Input Survei</h3>
@@ -1148,20 +1157,23 @@ export default function EmployeeApp() {
                 <button onClick={() => setView('home')} className="p-2 bg-[#131219] text-white rounded-full hover:bg-[#201f29] active:scale-95 transition-all shadow-sm shadow-[#131219]/20"><ChevronLeft size={20}/></button>
                 <div className="flex-1 min-w-0">
                   <h2 className="font-bold text-slate-800 text-lg truncate">Input Survei</h2>
-                  <select 
-                     className="w-full mt-1 bg-transparent border-none text-xs font-bold text-blue-600 outline-none truncate"
-                     value={closestProject?.id || ''}
-                     onChange={(e) => setClosestProject(projects.find(p => p.id === e.target.value))}
-                  >
-                     <option value="" disabled>Pilih Proyek...</option>
-                     {projects.map(p => <option key={p.id} value={p.id}>{p.pekerjaan}</option>)}
-                  </select>
                 </div>
              </div>
              
              {/* Tambahkan overflow-x-hidden untuk memastikan tidak ada elemen form yang membuat layar melar ke kanan */}
              <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 custom-scrollbar bg-white pb-10">
                 <form onSubmit={handleUnifiedSubmit} className="space-y-4 text-left w-full">
+                  <SurveyInputRow label="Pilih Proyek">
+                    <select 
+                       className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white transition-colors text-sm font-bold text-slate-800"
+                       value={closestProject?.id || ''}
+                       onChange={(e) => setClosestProject(projects.find(p => p.id === e.target.value))}
+                    >
+                       <option value="" disabled>Pilih Proyek...</option>
+                       {projects.map(p => <option key={p.id} value={p.id}>{p.pekerjaan}</option>)}
+                    </select>
+                  </SurveyInputRow>
+
                   <SurveyInputRow label="Tanggal">
                     <input type="date" value={uForm.tanggal} onChange={e => setUForm(p => ({ ...p, tanggal: e.target.value }))} className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white transition-colors" />
                   </SurveyInputRow>
@@ -1256,6 +1268,7 @@ export default function EmployeeApp() {
                             <div className="animate-in fade-in slide-in-from-top-2 border-t border-slate-100 pt-6">
                                <label className="text-[10px] font-normal text-slate-500 uppercase ml-1 block mb-2">Pilih Nama Proyek</label>
                                <select className="w-full p-3.5 rounded-xl bg-slate-50 border border-slate-200 outline-none text-sm font-normal focus:border-emerald-500" value={closestProject?.id || ''} onChange={(e) => setClosestProject(projects.find(p => p.id === e.target.value))}>
+                                  <option value="" disabled>Pilih Proyek...</option>
                                   {projects.map(p => <option key={p.id} value={p.id}>{p.pekerjaan}</option>)}
                                </select>
                             </div>
@@ -1350,14 +1363,6 @@ export default function EmployeeApp() {
                 <button onClick={() => setView('home')} className="p-2 bg-[#131219] text-white rounded-full hover:bg-[#201f29] active:scale-95 transition-all shadow-sm shadow-[#131219]/20"><ChevronLeft size={20}/></button>
                 <div className="flex-1 min-w-0">
                   <h2 className="font-bold text-slate-800 text-lg truncate">Buat Laporan</h2>
-                  <select 
-                     className="w-full mt-0.5 bg-transparent border-none text-xs font-bold text-blue-600 outline-none truncate"
-                     value={closestProject?.id || ''}
-                     onChange={(e) => setClosestProject(projects.find(p => p.id === e.target.value))}
-                  >
-                     <option value="" disabled>Pilih Proyek...</option>
-                     {projects.map(p => <option key={p.id} value={p.id}>{p.pekerjaan}</option>)}
-                  </select>
                 </div>
              </div>
              
@@ -1385,7 +1390,18 @@ export default function EmployeeApp() {
                        A. Informasi & Jam Kerja
                     </h4>
                     <div>
-                      <label className="text-[10px] font-bold block mb-1.5 uppercase text-slate-600">Lokasi Pekerjaan</label>
+                      <label className="text-[10px] font-bold block mb-1.5 uppercase text-slate-600">Pilih Proyek / Pekerjaan</label>
+                      <select 
+                         className="w-full p-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-800 text-xs font-bold outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 shadow-inner"
+                         value={closestProject?.id || ''}
+                         onChange={(e) => setClosestProject(projects.find(p => p.id === e.target.value))}
+                      >
+                         <option value="" disabled>Pilih Proyek yang Sedang Dikerjakan...</option>
+                         {projects.map(p => <option key={p.id} value={p.id}>{p.pekerjaan}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold block mb-1.5 uppercase text-slate-600">Lokasi Pekerjaan Detail</label>
                       <textarea rows="2" value={dailyReportForm.lokasi} onChange={e => setDailyReportForm(p => ({ ...p, lokasi: e.target.value }))} placeholder="Ketik nama jalan atau lokasi lengkap..." className="w-full p-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-800 text-xs font-bold outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 shadow-inner resize-y leading-relaxed break-words"></textarea>
                     </div>
                     <div>
@@ -1652,6 +1668,19 @@ export default function EmployeeApp() {
 
                 {laporTab === 'lapangan' && (
                   <form onSubmit={handleLaporLapanganSubmit} className="space-y-4 text-left pb-10 animate-in fade-in slide-in-from-bottom-2 w-full">
+                    <div className="bg-white p-4 md:p-5 rounded-2xl border border-slate-200 shadow-sm w-full">
+                      <h4 className="text-sm font-black uppercase text-slate-700 mb-3 border-b border-slate-100 pb-2 tracking-widest flex items-center gap-2">
+                         <MapPin size={16} className="text-emerald-500" /> Pilih Proyek
+                      </h4>
+                      <select 
+                         className="w-full p-2.5 mb-1 rounded-lg border border-slate-200 bg-slate-50 text-slate-800 text-xs font-bold outline-none focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 shadow-inner"
+                         value={closestProject?.id || ''}
+                         onChange={(e) => setClosestProject(projects.find(p => p.id === e.target.value))}
+                      >
+                         <option value="" disabled>Pilih Proyek...</option>
+                         {projects.map(p => <option key={p.id} value={p.id}>{p.pekerjaan}</option>)}
+                      </select>
+                    </div>
                     <div className="bg-white p-4 md:p-5 rounded-2xl border border-slate-200 shadow-sm w-full">
                       <h4 className="text-sm font-black uppercase text-slate-700 mb-3 border-b border-slate-100 pb-2 tracking-widest flex items-center gap-2">
                          <Camera size={16} className="text-emerald-500" /> Dokumentasi Lapangan
