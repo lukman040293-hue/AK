@@ -1325,10 +1325,13 @@ const MasterMapView = ({ allProjects, onSelectProject, mapType }) => {
                      window.L.marker(coord, { icon: createSimplePointMarker('#3b82f6'), zIndexOffset: 4500 }).addTo(surveyLayerRef.current);
                   });
                   
-                  // HANYA GAMBAR PIN MAP/ICON JIKA DATA BERASAL DARI INPUT SURVEI (Memiliki boundary_end)
+                  let endPt = null;
                   if (seg.boundary_end && !isNaN(parseFloat(seg.boundary_end.lat))) {
-                      window.L.marker(coords[0], { icon: createSurveyPinMarker('Blue', `Awal Survei`, seg.name, coords[0][0], coords[0][1]), zIndexOffset: 5000 }).addTo(surveyLayerRef.current);
-                      window.L.marker([parseFloat(seg.boundary_end.lat), parseFloat(seg.boundary_end.lng)], { icon: createSurveyPinMarker('Red', `Akhir Survei`, seg.name, parseFloat(seg.boundary_end.lat), parseFloat(seg.boundary_end.lng)), zIndexOffset: 5000 }).addTo(surveyLayerRef.current);
+                      endPt = [parseFloat(seg.boundary_end.lat), parseFloat(seg.boundary_end.lng)];
+                  }
+
+                  if (endPt) {
+                    window.L.marker(endPt, { icon: createActualMarker('Red', 'Akhir', `${p.pekerjaan.substring(0, 20)}... - ${seg.name}`, endPt[0], endPt[1]), zIndexOffset: 5000 }).addTo(surveyLayerRef.current);
                   }
                 }
                 
@@ -3231,6 +3234,7 @@ const SiteMapView = ({ projectData, onUpdateRoutes, isUpdating, showMsg, feeds }
           }
 
           // HANYA GAMBAR PIN MAP/ICON JIKA DATA BERASAL DARI INPUT SURVEI (Memiliki boundary_end)
+          // ATAU JIKA INI ADALAH SEGMEN PERTAMA (Untuk tetap memiliki penanda Awal Proyek)
           if (seg.boundary_end && !isNaN(parseFloat(seg.boundary_end.lat))) {
               // Pin Awal Survei (Biru)
               window.L.marker(coords[0], { icon: createSurveyPinMarker('Blue', `Awal Survei`, seg.name, coords[0][0], coords[0][1]), zIndexOffset: 5000 }).addTo(surveyLayerRef.current);
@@ -3239,6 +3243,9 @@ const SiteMapView = ({ projectData, onUpdateRoutes, isUpdating, showMsg, feeds }
               window.L.marker([parseFloat(seg.boundary_end.lat), parseFloat(seg.boundary_end.lng)], { icon: createSurveyPinMarker('Red', `Akhir Survei`, seg.name, parseFloat(seg.boundary_end.lat), parseFloat(seg.boundary_end.lng)), zIndexOffset: 5000 }).addTo(surveyLayerRef.current);
               
               actualBounds.extend([parseFloat(seg.boundary_end.lat), parseFloat(seg.boundary_end.lng)]);
+          } else if (idx === 0) {
+              // Fallback Pin Awal untuk segmen pertama jika tidak ada data survei
+              window.L.marker(coords[0], { icon: createSurveyPinMarker('Blue', `Awal Pekerjaan`, seg.name, coords[0][0], coords[0][1]), zIndexOffset: 5000 }).addTo(surveyLayerRef.current);
           }
 
           actualBounds.extend(coords[0]);
