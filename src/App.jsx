@@ -1328,6 +1328,8 @@ const MasterMapView = ({ allProjects, onSelectProject, mapType }) => {
                   let endPt = null;
                   if (seg.boundary_end && !isNaN(parseFloat(seg.boundary_end.lat))) {
                       endPt = [parseFloat(seg.boundary_end.lat), parseFloat(seg.boundary_end.lng)];
+                  } else if (coords.length > 1) {
+                      endPt = coords[coords.length - 1];
                   }
 
                   if (endPt) {
@@ -3233,24 +3235,19 @@ const SiteMapView = ({ projectData, onUpdateRoutes, isUpdating, showMsg, feeds }
             });
           }
 
-          // HANYA GAMBAR PIN MAP/ICON JIKA DATA BERASAL DARI INPUT SURVEI (Memiliki boundary_end)
-          // ATAU JIKA INI ADALAH SEGMEN PERTAMA (Untuk tetap memiliki penanda Awal Proyek)
-          if (seg.boundary_end && !isNaN(parseFloat(seg.boundary_end.lat))) {
-              // Pin Awal Survei (Biru)
-              window.L.marker(coords[0], { icon: createSurveyPinMarker('Blue', `Awal Survei`, seg.name, coords[0][0], coords[0][1]), zIndexOffset: 5000 }).addTo(surveyLayerRef.current);
-              
-              // Pin Akhir Survei (Merah)
-              window.L.marker([parseFloat(seg.boundary_end.lat), parseFloat(seg.boundary_end.lng)], { icon: createSurveyPinMarker('Red', `Akhir Survei`, seg.name, parseFloat(seg.boundary_end.lat), parseFloat(seg.boundary_end.lng)), zIndexOffset: 5000 }).addTo(surveyLayerRef.current);
-              
-              actualBounds.extend([parseFloat(seg.boundary_end.lat), parseFloat(seg.boundary_end.lng)]);
-          } else if (idx === 0) {
-              // Fallback Pin Awal untuk segmen pertama jika tidak ada data survei
-              window.L.marker(coords[0], { icon: createSurveyPinMarker('Blue', `Awal Pekerjaan`, seg.name, coords[0][0], coords[0][1]), zIndexOffset: 5000 }).addTo(surveyLayerRef.current);
-          }
-
+          // Pin Awal Survei (Biru)
+          window.L.marker(coords[0], { icon: createSurveyPinMarker('Blue', `Awal Survei`, seg.name, coords[0][0], coords[0][1]), zIndexOffset: 5000 }).addTo(surveyLayerRef.current);
           actualBounds.extend(coords[0]);
-          if (coords.length > 1) {
-              actualBounds.extend(coords[coords.length - 1]);
+          
+          // Pin Akhir Survei (Merah) dari data survei
+          if (seg.boundary_end && !isNaN(parseFloat(seg.boundary_end.lat))) {
+              window.L.marker([parseFloat(seg.boundary_end.lat), parseFloat(seg.boundary_end.lng)], { icon: createSurveyPinMarker('Red', `Akhir Survei`, seg.name, parseFloat(seg.boundary_end.lat), parseFloat(seg.boundary_end.lng)), zIndexOffset: 5000 }).addTo(surveyLayerRef.current);
+              actualBounds.extend([parseFloat(seg.boundary_end.lat), parseFloat(seg.boundary_end.lng)]);
+          } else if (coords.length > 1) {
+              // Jika tidak ada batas akhir survei, tampilkan di titik terakhir sebagai informasi
+              const endPt = coords[coords.length - 1];
+              window.L.marker(endPt, { icon: createSurveyPinMarker('Red', `Akhir Rute`, seg.name, endPt[0], endPt[1]), zIndexOffset: 5000 }).addTo(surveyLayerRef.current);
+              actualBounds.extend(endPt);
           }
 
           // Tambahkan label jarak antar titik realisasi jika showDistances aktif
