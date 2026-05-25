@@ -1182,7 +1182,25 @@ const MasterMapView = ({ allProjects, onSelectProject, mapType }) => {
         iconSize: [0, 0]
       });
 
-      // 3. Fungsi Gambar Titik Biasa untuk Rute
+      // 3. Fungsi Gambar Titik Realisasi
+      const createActualMarker = (theme, prefix, segName, lat, lng) => {
+        const gradId = theme === 'Blue' ? `gB-${Math.random()}` : `gR-${Math.random()}`;
+        const stop1 = theme === 'Blue' ? '#38bdf8' : '#fb7185';
+        const stop2 = theme === 'Blue' ? '#2563eb' : '#e11d48';
+        const textColor = theme === 'Blue' ? 'text-blue-600' : 'text-rose-600';
+        return window.L.divIcon({
+          className: 'bg-transparent border-0 overflow-visible',
+          html: `<div class="relative flex flex-col items-center group cursor-pointer pointer-events-auto" style="transform: translate(-50%, -50%);">
+                   <div class="absolute bottom-full mb-1.5 px-2 py-1 bg-white/95 backdrop-blur-md rounded-lg shadow-[0_4px_10px_rgba(0,0,0,0.15)] border border-slate-200/50 whitespace-nowrap text-center z-[9999] opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100 transition-all duration-300 pointer-events-none origin-bottom">
+                      <div class="text-[8px] font-black uppercase tracking-wide leading-tight text-slate-800"><span class="${textColor}">${prefix}</span><br/>${segName}</div>
+                   </div>
+                   <div class="w-3 h-3 rounded-full border-2 border-white shadow-md relative origin-bottom group-hover:scale-110 transition-all duration-300" style="background: linear-gradient(to bottom, ${stop1}, ${stop2});"></div>
+                 </div>`,
+          iconSize: [0, 0]
+        });
+      };
+      
+      // 4. Fungsi Gambar Titik Biasa untuk Rute
       const createSimplePointMarker = (color) => {
         return window.L.divIcon({
           className: 'bg-transparent border-0',
@@ -1191,7 +1209,7 @@ const MasterMapView = ({ allProjects, onSelectProject, mapType }) => {
         });
       };
 
-      // 4. Fungsi Gambar Pin Map untuk Survei Awal/Akhir
+      // 5. Fungsi Gambar Pin Map untuk Survei Awal/Akhir
       const createSurveyPinMarker = (theme, prefix, segName, lat, lng) => {
         const gradId = theme === 'Blue' ? `gB-${Math.random()}` : `gR-${Math.random()}`;
         const stop1 = theme === 'Blue' ? '#38bdf8' : '#fb7185';
@@ -1306,12 +1324,12 @@ const MasterMapView = ({ allProjects, onSelectProject, mapType }) => {
                   coords.forEach(coord => {
                      window.L.marker(coord, { icon: createSimplePointMarker('#3b82f6'), zIndexOffset: 4500 }).addTo(surveyLayerRef.current);
                   });
-                }
-                
-                // HANYA GAMBAR PIN MAP/ICON JIKA DATA BERASAL DARI INPUT SURVEI (Memiliki boundary_end)
-                if (seg.boundary_end && !isNaN(parseFloat(seg.boundary_end.lat))) {
-                    window.L.marker(coords[0], { icon: createSurveyPinMarker('Blue', `Awal Survei`, seg.name, coords[0][0], coords[0][1]), zIndexOffset: 5000 }).addTo(surveyLayerRef.current);
-                    window.L.marker([parseFloat(seg.boundary_end.lat), parseFloat(seg.boundary_end.lng)], { icon: createSurveyPinMarker('Red', `Akhir Survei`, seg.name, parseFloat(seg.boundary_end.lat), parseFloat(seg.boundary_end.lng)), zIndexOffset: 5000 }).addTo(surveyLayerRef.current);
+                  
+                  // HANYA GAMBAR PIN MAP/ICON JIKA DATA BERASAL DARI INPUT SURVEI (Memiliki boundary_end)
+                  if (seg.boundary_end && !isNaN(parseFloat(seg.boundary_end.lat))) {
+                      window.L.marker(coords[0], { icon: createSurveyPinMarker('Blue', `Awal Survei`, seg.name, coords[0][0], coords[0][1]), zIndexOffset: 5000 }).addTo(surveyLayerRef.current);
+                      window.L.marker([parseFloat(seg.boundary_end.lat), parseFloat(seg.boundary_end.lng)], { icon: createSurveyPinMarker('Red', `Akhir Survei`, seg.name, parseFloat(seg.boundary_end.lat), parseFloat(seg.boundary_end.lng)), zIndexOffset: 5000 }).addTo(surveyLayerRef.current);
+                  }
                 }
                 
                 coords.forEach(c => bounds.extend(c));
