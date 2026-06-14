@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   MapPin, Camera, LogOut, CheckCircle2, AlertCircle, 
   Clock, Send, ChevronLeft, Loader2, UserCircle, Plus, Video, Trash2, UserCheck, Map,
-  Info, Cloud, X, UploadCloud, FileText, Calendar, Thermometer, Zap, Navigation
+  Info, Cloud, X, UploadCloud, FileText, Calendar, Thermometer, Zap
 } from 'lucide-react';
 
 // --- KONFIGURASI SUPABASE ---
@@ -34,41 +34,6 @@ const DEFAULT_TENAGA_KERJA = [
   { posisi: 'Site Engineer', jumlah: '' },
   { posisi: 'Inspector', jumlah: '' }
 ];
-
-// --- HELPER: KOMPRESI GAMBAR CLIENT-SIDE ---
-const compressImage = async (file) => {
-  if (!file.type.startsWith('image/')) return file; // Jangan kompres video
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = (event) => {
-      const img = new Image();
-      img.src = event.target.result;
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 1280;
-        const MAX_HEIGHT = 1280;
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
-        } else {
-          if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-
-        canvas.toBlob((blob) => {
-          resolve(new File([blob], file.name, { type: file.type, lastModified: Date.now() }));
-        }, file.type, 0.75); // Kompresi kualitas 75%
-      };
-    };
-  });
-};
 
 // --- HELPER PARSER TEMPLATE DARI COMMAND CENTER ---
 const getInitialFormState = (project, currentDate) => {
@@ -107,6 +72,8 @@ const getInitialFormState = (project, currentDate) => {
         .map(tk => ({ posisi: tk.posisi || '', jumlah: '' }))
         .filter(tk => tk.posisi.trim() !== '');
 
+      // PENTING: Gabungkan template lama dari database dengan daftar default terbaru
+      // agar posisi baru (Flagman, Inspector, dll) selalu tertambahkan otomatis
       const mergedTk = [...templateTk];
       DEFAULT_TENAGA_KERJA.forEach(defTk => {
         if (!mergedTk.find(tk => tk.posisi.toLowerCase() === defTk.posisi.toLowerCase())) {
@@ -180,23 +147,12 @@ export default function EmployeeApp() {
   // --- STATE UNTUK FORM INPUT SURVEI ---
   const [uForm, setUForm] = useState({ 
     tanggal: new Date().toISOString().split('T')[0], 
-    namaSegmen: '', startLat: '', startLng: '', endLat: '', endLng: '', 
+    namaSegmen: '', 
+    points: [{ lat: '', lng: '' }, { lat: '', lng: '' }], 
     panjang: '', lebar: '', jenis_model_awal: '', noteDesc: '' 
   });
   const [uMedia, setUMedia] = useState([]);
   const [uDataUkur, setUDataUkur] = useState(null);
-
-  // --- STATE UNTUK FORM UPDATE RUTE GPS ---
-  const [ruteForm, setRuteForm] = useState({
-    type: 'realisasi', // 'realisasi' atau 'sketsa'
-    segmentName: '',   // Nama segmen yang dipilih atau 'NEW'
-    newSegmentName: '',// Input jika segmentName === 'NEW'
-    lat: '',
-    lng: '',
-    notes: ''
-  });
-  const [ruteFiles, setRuteFiles] = useState([]);
-  const [existingSegments, setExistingSegments] = useState([]);
 
   // --- STATE UNTUK LOGIN ---
   const [loginForm, setLoginForm] = useState({ id: '', pin: '' });
@@ -218,11 +174,13 @@ export default function EmployeeApp() {
       script.onload = () => {
         const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         setSupabase(client);
+        fetchProjects(client);
       };
       document.head.appendChild(script);
     } else {
       const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       setSupabase(client);
+      fetchProjects(client);
     }
 
     // 2. Load jsPDF & html2canvas untuk Cetak PDF
@@ -241,19 +199,23 @@ export default function EmployeeApp() {
 
   const fetchProjects = async (client) => {
     try {
-      let { data, error } = await client.from('projects').select('id, pekerjaan, report_template_data');
+      let { data, error } = await client.from('projects').select('*');
       
       if (error) throw error;
 
       if (!data || data.length === 0) {
-         setProjects([]);
+         data = [{ 
+            id: 'dummy-123', pekerjaan: 'Proyek Uji Coba (Dummy)', start_lat: -6.2, start_lng: 106.8, 
+            item_utama_data: [{pekerjaan: 'Galian Tanah', satuan: 'm3'}] 
+         }];
       } else {
          data = data.map(p => ({
              ...p,
              pekerjaan: p.pekerjaan || p.nama_proyek || p.nama || p.title || p.name || 'Proyek Tanpa Nama'
          }));
-         setProjects(data);
       }
+      
+      setProjects(data);
     } catch (e) {
       console.error("Fetch projects error:", e);
       showMsg('Gagal memuat daftar proyek dari server', 'error');
@@ -356,37 +318,6 @@ export default function EmployeeApp() {
     }
   }, [JSON.stringify(dailyReportForm.shifts)]); 
 
-  // --- EFEK KHUSUS FITUR UPDATE RUTE ---
-  useEffect(() => {
-    if (view === 'rute_gps' && closestProject && supabase) {
-       const loadSegments = async () => {
-         try {
-           const col = ruteForm.type === 'realisasi' ? 'actual_segments_data' : 'planned_path';
-           const { data, error } = await supabase.from('projects').select(col).eq('id', closestProject.id).single();
-           
-           if (!error && data) {
-              let parsedData = data[col];
-              if (typeof parsedData === 'string') {
-                 try { parsedData = JSON.parse(parsedData); } catch(e){ parsedData = []; }
-              }
-              if (Array.isArray(parsedData)) {
-                 const names = parsedData.map(s => s.name || s.id).filter(Boolean);
-                 setExistingSegments([...new Set(names)]); // Hapus duplikat nama
-                 if (names.length > 0 && !ruteForm.segmentName) {
-                     setRuteForm(prev => ({ ...prev, segmentName: names[0] }));
-                 }
-              } else {
-                 setExistingSegments([]);
-              }
-           }
-         } catch (err) {
-           console.error("Gagal memuat daftar segmen rute:", err);
-         }
-       };
-       loadSegments();
-    }
-  }, [view, closestProject?.id, ruteForm.type, supabase]);
-
   const updateShift = (index, field, value) => {
     const newShifts = [...dailyReportForm.shifts];
     newShifts[index][field] = value;
@@ -394,11 +325,13 @@ export default function EmployeeApp() {
     const shift = newShifts[index];
     if (field === 'jamMulai' || field === 'jamSelesai' || field === 'tanggalMulai') {
       if (shift.jamMulai && shift.jamSelesai && shift.tanggalMulai) {
+        // Jika jam selesai lebih kecil dari jam mulai (cth: shift malam 19:00 - 05:00), set tanggal selesai ke H+1
         if (shift.jamSelesai < shift.jamMulai) {
           const startDate = new Date(shift.tanggalMulai);
           startDate.setDate(startDate.getDate() + 1);
           shift.tanggalSelesai = startDate.toISOString().split('T')[0];
         } else {
+          // Jika normal, pastikan tanggal selesai sama dengan tanggal mulai
           shift.tanggalSelesai = shift.tanggalMulai;
         }
       }
@@ -450,15 +383,6 @@ export default function EmployeeApp() {
     setConfirmDeleteFormItem(null);
   };
 
-  const handleLogout = async () => {
-    if (supabase) {
-      await supabase.auth.signOut();
-    }
-    setUser(null);
-    setProjects([]);
-    setView('login');
-  };
-
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsProcessing(true);
@@ -466,49 +390,52 @@ export default function EmployeeApp() {
     try {
       const inputId = loginForm.id.trim().toLowerCase();
       const inputPin = loginForm.pin.trim();
-      
-      const emailDummy = `${inputId}@karyawan.com`;
 
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: emailDummy,
-        password: inputPin
-      });
+      let { data, error } = await supabase.from('karyawan').select('*');
 
-      if (authError) {
-        showMsg('Login Gagal: ID Karyawan atau PIN salah!', 'error');
+      if (error) {
+        showMsg('Gagal membaca tabel karyawan!', 'error');
         setIsProcessing(false);
         return;
       }
 
-      let userName = inputId;
-      let userRole = 'Pelaksana';
-      
-      const { data: empData, error: empError } = await supabase.from('karyawan').select('*');
-      
-      if (!empError && empData && empData.length > 0) {
-        const foundUser = empData.find(emp => {
-          return Object.values(emp).some(val => 
-            val !== null && val !== undefined && String(val).toLowerCase() === inputId
-          );
-        });
-
-        if (foundUser) {
-          userName = foundUser.nama || foundUser.nama_lengkap || foundUser.name || foundUser.id_karyawan || inputId;
-          userRole = foundUser.jabatan || foundUser.role || foundUser.posisi || 'Pelaksana';
-        }
+      if (!data || data.length === 0) {
+         showMsg('Tabel karyawan masih kosong!', 'error');
+         setIsProcessing(false);
+         return;
       }
 
-      setUser({
-        name: userName,
-        role: userRole,
-        id: inputId,
-        uid: authData.user.id
+      const foundUser = data.find(emp => {
+        return Object.values(emp).some(val => 
+          val !== null && val !== undefined && String(val).toLowerCase() === inputId
+        );
       });
-      
-      await fetchProjects(supabase);
 
-      setView('home');
-      showMsg('Selamat bekerja!', 'success');
+      if (!foundUser) {
+        showMsg('ID/Nama tidak terdaftar di database!', 'error');
+        setIsProcessing(false);
+        return;
+      }
+
+      const dbPin = foundUser.pin || foundUser.password || foundUser.kata_sandi || foundUser.sandi || foundUser.pass;
+
+      if (dbPin === undefined || dbPin === null) {
+        showMsg('Kolom PIN/Password tidak ditemukan di tabel database!', 'error');
+        setIsProcessing(false);
+        return;
+      }
+
+      if (String(dbPin) === inputPin) {
+        setUser({
+          name: foundUser.nama || foundUser.nama_lengkap || foundUser.name || foundUser.id_karyawan || 'Karyawan',
+          role: foundUser.jabatan || foundUser.role || foundUser.posisi || 'Pelaksana',
+          id: inputId
+        });
+        setView('home');
+        showMsg(`Selamat bekerja!`, 'success');
+      } else {
+        showMsg('PIN atau Password yang dimasukkan salah!', 'error');
+      }
     } catch (error) {
       showMsg('Terjadi kesalahan jaringan!', 'error');
     } finally {
@@ -516,7 +443,7 @@ export default function EmployeeApp() {
     }
   };
 
-  const getUnifiedGPS = (type) => {
+  const getUnifiedGPS = (index) => {
     if (!navigator.geolocation) {
       showMsg('Geolokasi tidak didukung perangkat ini.', 'error');
       return;
@@ -526,15 +453,11 @@ export default function EmployeeApp() {
       (position) => {
         const lat = position.coords.latitude.toFixed(6);
         const lng = position.coords.longitude.toFixed(6);
-        if (type === 'rute') {
-           setRuteForm(p => ({ ...p, lat, lng }));
-        } else {
-           setUForm(p => ({
-             ...p,
-             [type === 'start' ? 'startLat' : 'endLat']: lat,
-             [type === 'start' ? 'startLng' : 'endLng']: lng
-           }));
-        }
+        setUForm(p => {
+          const newPoints = [...p.points];
+          newPoints[index] = { lat, lng };
+          return { ...p, points: newPoints };
+        });
         showMsg('Koordinat GPS berhasil dikunci!', 'success');
       },
       (error) => {
@@ -542,6 +465,15 @@ export default function EmployeeApp() {
       },
       { enableHighAccuracy: true }
     );
+  };
+
+  const handleCoordChange = (index, field, value) => {
+    const cleanValue = value.replace(/,/g, '.');
+    setUForm(p => {
+       const newPoints = [...p.points];
+       newPoints[index][field] = cleanValue;
+       return { ...p, points: newPoints };
+    });
   };
 
   const generateDailyReportReceipt = async (reportData, projectData, reporterName) => {
@@ -1039,64 +971,118 @@ export default function EmployeeApp() {
       let csvUrl = null;
       if (uDataUkur) {
         showMsg('Mengunggah data CSV...', 'info');
-        const fileName = `csv_${Date.now()}_${uDataUkur.name}`;
-        await supabase.storage.from('project-media').upload(`survey/${fileName}`, uDataUkur);
-        const { data } = supabase.storage.from('project-media').getPublicUrl(`survey/${fileName}`);
+        const fileName = `csv_${Date.now()}_${uDataUkur.name.replace(/\s+/g, '_')}`;
+        await supabase.storage.from('project-media').upload(`documents/${fileName}`, uDataUkur);
+        const { data } = supabase.storage.from('project-media').getPublicUrl(`documents/${fileName}`);
         csvUrl = data.publicUrl;
+        
+        // C. Insert ke tabel documents
+        await supabase.from('documents').insert([{
+           project_id: closestProject.id,
+           name: uDataUkur.name,
+           category: 'Survei',
+           status: 'Verified',
+           file_url: csvUrl
+        }]);
       }
 
       let mediaUrls = [];
       if (uMedia.length > 0) {
         showMsg('Mengunggah dokumentasi...', 'info');
         for (const file of uMedia) {
-          const fileName = `media_${Date.now()}_${file.name}`;
-          await supabase.storage.from('project-media').upload(`survey/${fileName}`, file);
-          const { data } = supabase.storage.from('project-media').getPublicUrl(`survey/${fileName}`);
+          const fileName = `media_${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
+          await supabase.storage.from('project-media').upload(`reports/${fileName}`, file);
+          const { data } = supabase.storage.from('project-media').getPublicUrl(`reports/${fileName}`);
           mediaUrls.push(data.publicUrl);
         }
       }
 
-      const newSegment = {
-        id: Date.now().toString(),
-        nama: uForm.namaSegmen,
-        start_lat: parseFloat(uForm.startLat) || null,
-        start_lng: parseFloat(uForm.startLng) || null,
-        end_lat: parseFloat(uForm.endLat) || null,
-        end_lng: parseFloat(uForm.endLng) || null,
-        panjang: uForm.panjang,
-        lebar: uForm.lebar,
-        jenis_model_awal: uForm.jenis_model_awal,
-        data_ukur_url: csvUrl,
-        media_urls: mediaUrls,
-        catatan: uForm.noteDesc,
-        tanggal: uForm.tanggal,
-        dilaporkan_oleh: user.name
-      };
+      // A. Update tabel projects
+      const segmentName = uForm.namaSegmen.trim() || 'Segmen 1';
+      const sLat = parseFloat(uForm.points[0].lat) || null;
+      const sLng = parseFloat(uForm.points[0].lng) || null;
+      const eLat = parseFloat(uForm.points[1].lat) || null;
+      const eLng = parseFloat(uForm.points[1].lng) || null;
 
-      try {
-        const { data: projData, error: fetchErr } = await supabase.from('projects').select('rute').eq('id', closestProject.id).single();
-        if (!fetchErr && projData) {
-          const currentRute = projData.rute || [];
-          const updatedRute = [...currentRute, newSegment];
-          await supabase.from('projects').update({ rute: updatedRute }).eq('id', closestProject.id);
-        }
-      } catch (err) {
-        console.warn("Kolom 'rute' tidak ditemukan di database. Penyimpanan spesifik rute dilewati.", err);
+      const { data: projData, error: fetchErr } = await supabase.from('projects')
+         .select('actual_segments_data')
+         .eq('id', closestProject.id)
+         .single();
+         
+      if (fetchErr) throw fetchErr;
+
+      let updatedSegments = [];
+      if (projData.actual_segments_data) {
+         updatedSegments = Array.isArray(projData.actual_segments_data) 
+             ? [...projData.actual_segments_data] 
+             : (typeof projData.actual_segments_data === 'string' ? JSON.parse(projData.actual_segments_data) : []);
       }
 
-      const deskripsi = `[LAPORAN SURVEI]\nNama Segmen: ${uForm.namaSegmen}\nPanjang: ${uForm.panjang}\nLebar: ${uForm.lebar}\nJenis: ${uForm.jenis_model_awal}\nCatatan: ${uForm.noteDesc}`;
-      const { error: repErr } = await supabase.from('field_reports').insert([{
-        project_id: closestProject.id,
-        title: 'Laporan Survei',
-        description: deskripsi,
-        media_url: mediaUrls[0] || null, 
-        is_problem: uForm.noteDesc.toLowerCase().includes('kendala') || uForm.noteDesc.toLowerCase().includes('masalah')
-      }]);
+      const newSegment = {
+        id: Date.now(),
+        name: segmentName,
+        points: [{ lat: sLat || 0, lng: sLng || 0 }],
+        boundary_end: { lat: eLat || 0, lng: eLng || 0 }
+      };
+
+      const existingIdx = updatedSegments.findIndex(s => s.name === segmentName);
+      if (existingIdx >= 0) {
+          updatedSegments[existingIdx] = newSegment;
+      } else {
+          updatedSegments.push(newSegment);
+      }
+
+      const { error: updateErr } = await supabase.from('projects').update({ 
+         panjang_rencana: uForm.panjang,
+         lebar_rencana: uForm.lebar,
+         jenis_model: uForm.jenis_model_awal,
+         start_lat: sLat,
+         start_lng: sLng,
+         end_lat: eLat,
+         end_lng: eLng,
+         updated_at: new Date().toISOString(),
+         actual_segments_data: updatedSegments
+      }).eq('id', closestProject.id);
+      
+      if (updateErr) throw updateErr;
+
+      // B. Insert ke tabel field_reports
+      const reportsToInsert = [];
+      
+      if (mediaUrls.length > 0) {
+         mediaUrls.forEach((url, idx) => {
+           reportsToInsert.push({
+             project_id: closestProject.id,
+             title: `Dokumentasi Survei 0% (Part ${idx + 1})`,
+             description: `Lampiran visual survei untuk ${segmentName}`,
+             media_url: url,
+             is_problem: false
+           });
+         });
+      }
+      
+      if (uForm.noteDesc) {
+         reportsToInsert.push({
+           project_id: closestProject.id,
+           title: 'Catatan Survei',
+           description: uForm.noteDesc,
+           is_problem: uForm.noteDesc.toLowerCase().includes('kendala') || uForm.noteDesc.toLowerCase().includes('masalah')
+         });
+      }
+      
+      reportsToInsert.push({
+         project_id: closestProject.id,
+         title: 'Pengiriman Data Survei',
+         description: `Tim lapangan telah mengirimkan data hasil survei untuk ${segmentName}.\nPanjang Eks.: ${uForm.panjang}m | Lebar Eks.: ${uForm.lebar}m | Model Eks.: ${uForm.jenis_model_awal}\nKoordinat: Awal(${sLat}, ${sLng}) ... Akhir(${eLat}, ${eLng})`,
+         is_problem: false
+      });
+
+      const { error: repErr } = await supabase.from('field_reports').insert(reportsToInsert);
       if (repErr) throw repErr;
 
-      showMsg('Data Survei berhasil disimpan!', 'success');
+      showMsg('Data Survei berhasil disinkronisasi!', 'success');
       
-      setUForm({ tanggal: new Date().toISOString().split('T')[0], namaSegmen: '', startLat: '', startLng: '', endLat: '', endLng: '', panjang: '', lebar: '', jenis_model_awal: '', noteDesc: '' });
+      setUForm({ tanggal: new Date().toISOString().split('T')[0], namaSegmen: '', points: [{ lat: '', lng: '' }, { lat: '', lng: '' }], panjang: '', lebar: '', jenis_model_awal: '', noteDesc: '' });
       setUMedia([]);
       setUDataUkur(null);
       setTimeout(() => setView('home'), 1500);
@@ -1105,114 +1091,6 @@ export default function EmployeeApp() {
       showMsg('Gagal menyimpan survei: ' + error.message, 'error');
     } finally {
       setIsProcessing(false);
-    }
-  };
-
-  // --- HANDLER SUBMIT UPDATE RUTE (REALISASI / SKETSA) ---
-  const handleRuteSubmit = async (e) => {
-    e.preventDefault();
-    if (!closestProject) { showMsg('Pilih proyek terlebih dahulu!', 'error'); return; }
-    if (!ruteForm.lat || !ruteForm.lng) { showMsg('Harap isi atau ambil kordinat GPS!', 'error'); return; }
-    
-    const finalSegmentName = ruteForm.segmentName === 'NEW' ? ruteForm.newSegmentName.trim() : ruteForm.segmentName;
-    if (!finalSegmentName) { showMsg('Nama segmen tidak boleh kosong!', 'error'); return; }
-
-    setIsProcessing(true);
-    try {
-       // 1. Upload dan Compress Gambar jika ada
-       let publicUrls = [];
-       if (ruteFiles.length > 0) {
-         showMsg(`Mengompres & mengunggah ${ruteFiles.length} foto/video...`, 'info');
-         for (const file of ruteFiles) {
-           const compressedFile = await compressImage(file);
-           const fileName = `rute_${Date.now()}_${Math.random().toString(36).substring(7)}.${compressedFile.name.split('.').pop()}`;
-           const { error: uploadError } = await supabase.storage.from('project-media').upload(`reports/${fileName}`, compressedFile);
-           if (!uploadError) {
-             const { data } = supabase.storage.from('project-media').getPublicUrl(`reports/${fileName}`);
-             publicUrls.push(data.publicUrl);
-           }
-         }
-       }
-
-       const targetCol = ruteForm.type === 'realisasi' ? 'actual_segments_data' : 'planned_path';
-       
-       // 2. Tarik Data Segmen Paling Baru dari DB
-       const { data: currentProj, error: fetchErr } = await supabase.from('projects').select(targetCol).eq('id', closestProject.id).single();
-       if (fetchErr) throw fetchErr;
-
-       let currentData = currentProj[targetCol];
-       if (typeof currentData === 'string') {
-          try { currentData = JSON.parse(currentData); } catch(e) { currentData = []; }
-       }
-       if (!Array.isArray(currentData)) currentData = [];
-
-       const segIndex = currentData.findIndex(s => (s.name || s.id) === finalSegmentName);
-       const latFloat = parseFloat(ruteForm.lat);
-       const lngFloat = parseFloat(ruteForm.lng);
-
-       // 3. Modifikasi array JSON sesuai tipe jalur (HANYA POIN, TANPA PIN/MARKER)
-       if (ruteForm.type === 'realisasi') {
-          if (segIndex >= 0) {
-             if (!currentData[segIndex].points) currentData[segIndex].points = [];
-             currentData[segIndex].points.push({ lat: latFloat, lng: lngFloat });
-          } else {
-             currentData.push({
-                 id: Date.now(),
-                 name: finalSegmentName,
-                 points: [{ lat: latFloat, lng: lngFloat }]
-             });
-          }
-       } else {
-          if (segIndex >= 0) {
-             if (!currentData[segIndex].points) currentData[segIndex].points = [];
-             currentData[segIndex].points.push({ lat: latFloat, lng: lngFloat });
-          } else {
-             currentData.push({
-                 id: Date.now().toString(),
-                 name: finalSegmentName,
-                 type: 'line', color: '#f59e0b', isDashed: true,
-                 points: [{ lat: latFloat, lng: lngFloat }]
-             });
-          }
-       }
-
-       // 4. Update Database
-       const { error: updateErr } = await supabase.from('projects')
-         .update({ 
-           [targetCol]: currentData, 
-           updated_at: new Date().toISOString() 
-         }).eq('id', closestProject.id);
-       
-       if (updateErr) throw updateErr;
-
-       // 5. Insert Log ke Field Reports
-       const labelTipe = ruteForm.type === 'realisasi' ? 'Realisasi' : 'Sketsa Rencana';
-       const deskripsiReport = `Penambahan titik rute ${labelTipe.toLowerCase()} baru pada [${finalSegmentName}].\nKordinat Baru: Lat ${latFloat}, Lng ${lngFloat}\nCatatan: ${ruteForm.notes || '-'}`;
-       const mediaUrlString = publicUrls.length > 0 ? publicUrls.join(',') : null;
-
-       const { error: repErr } = await supabase.from('field_reports').insert([{
-           project_id: closestProject.id,
-           title: `Update Progress Rute ${labelTipe}`,
-           description: deskripsiReport,
-           media_url: mediaUrlString,
-           is_problem: ruteForm.notes.toLowerCase().includes('kendala') || ruteForm.notes.toLowerCase().includes('masalah')
-       }]);
-       
-       if (repErr) throw repErr;
-
-       showMsg('Titik Rute Berhasil Disimpan & Disinkronkan!', 'success');
-       setRuteForm({ type: 'realisasi', segmentName: '', newSegmentName: '', lat: '', lng: '', notes: '' });
-       setRuteFiles([]);
-       
-       // Sync project details di memory sebelum kembali ke Home (tanpa harus refresh browser)
-       await fetchProjects(supabase);
-       
-       setTimeout(() => setView('home'), 1500);
-
-    } catch (error) {
-       showMsg('Gagal memproses rute: ' + error.message, 'error');
-    } finally {
-       setIsProcessing(false);
     }
   };
 
@@ -1243,7 +1121,7 @@ export default function EmployeeApp() {
         `}</style>
 
         {notification && (
-          <div className={`absolute top-4 left-4 right-4 z-[9999] p-3 rounded-2xl shadow-lg text-xs font-bold flex items-center gap-2 animate-in slide-in-from-top-2 ${notification.type === 'error' ? 'bg-rose-500 text-white' : notification.type === 'info' ? 'bg-blue-500 text-white' : 'bg-emerald-500 text-white'}`}>
+          <div className={`absolute top-4 left-4 right-4 z-50 p-3 rounded-2xl shadow-lg text-xs font-bold flex items-center gap-2 animate-in slide-in-from-top-2 ${notification.type === 'error' ? 'bg-rose-500 text-white' : notification.type === 'info' ? 'bg-blue-500 text-white' : 'bg-emerald-500 text-white'}`}>
             {notification.type === 'error' ? <AlertCircle size={16}/> : <CheckCircle2 size={16}/>}
             {notification.msg}
           </div>
@@ -1296,202 +1174,35 @@ export default function EmployeeApp() {
                          <h2 className="text-base font-black truncate max-w-[200px] text-[#131219]">{user.name}</h2>
                       </div>
                    </div>
-                   <button onClick={handleLogout} className="px-4 py-2 bg-[#131219] rounded-xl hover:bg-[#201f29] active:scale-95 transition-all flex items-center gap-2 text-xs font-bold shadow-md shadow-[#131219]/20 text-white">
+                   <button onClick={() => setView('login')} className="px-4 py-2 bg-[#131219] rounded-xl hover:bg-[#201f29] active:scale-95 transition-all flex items-center gap-2 text-xs font-bold shadow-md shadow-[#131219]/20 text-white">
                       <LogOut size={14}/>
                       LOGOUT
                    </button>
                 </div>
              </div>
 
-             <div className="p-6 flex-1 flex flex-col gap-4 mt-2 relative z-20 custom-scrollbar overflow-y-auto pb-10">
-                <button onClick={() => setView('absen')} className="bg-white p-5 rounded-[2rem] shadow-sm border border-slate-200 flex items-center gap-5 hover:border-slate-300 transition-all group active:scale-95">
-                   <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-[1.5rem] flex items-center justify-center group-hover:scale-110 transition-transform shrink-0"><UserCheck strokeWidth={2.5} size={30}/></div>
+             <div className="p-6 flex-1 flex flex-col gap-5 mt-2 relative z-20 custom-scrollbar overflow-y-auto">
+                <button onClick={() => { if(projects.length > 0 && !closestProject) setClosestProject(projects[0]); setView('absen'); }} className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 flex items-center gap-5 hover:border-slate-300 transition-all group active:scale-95">
+                   <div className="w-[72px] h-[72px] bg-emerald-50 text-emerald-600 rounded-[1.5rem] flex items-center justify-center group-hover:scale-110 transition-transform shrink-0"><UserCheck strokeWidth={2.5} size={34}/></div>
                    <div className="text-left flex-1">
-                      <h3 className="font-normal text-slate-800 text-[20px] tracking-tight">Absensi</h3>
-                      <p className="text-[12px] text-slate-500 mt-1 font-medium leading-snug">Catat data absensi harian</p>
+                      <h3 className="font-normal text-slate-800 text-[22px] tracking-tight">Absensi</h3>
+                      <p className="text-[13px] text-slate-500 mt-1 font-medium leading-snug">Catat data absensi harian</p>
                    </div>
                 </button>
-                <button onClick={() => setView('lapor')} className="bg-white p-5 rounded-[2rem] shadow-sm border border-slate-200 flex items-center gap-5 hover:border-slate-300 transition-all group active:scale-95">
-                   <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-[1.5rem] flex items-center justify-center group-hover:scale-110 transition-transform shrink-0"><FileText strokeWidth={2.5} size={30}/></div>
+                <button onClick={() => { if(projects.length > 0 && !closestProject) setClosestProject(projects[0]); setView('lapor'); }} className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 flex items-center gap-5 hover:border-slate-300 transition-all group active:scale-95">
+                   <div className="w-[72px] h-[72px] bg-blue-50 text-blue-600 rounded-[1.5rem] flex items-center justify-center group-hover:scale-110 transition-transform shrink-0"><FileText strokeWidth={2.5} size={34}/></div>
                    <div className="text-left flex-1">
-                      <h3 className="font-normal text-slate-800 text-[20px] tracking-tight">Buat Laporan</h3>
-                      <p className="text-[12px] text-slate-500 mt-1 font-medium leading-snug">Laporan harian & lapor cepat lapangan</p>
+                      <h3 className="font-normal text-slate-800 text-[22px] tracking-tight">Buat Laporan</h3>
+                      <p className="text-[13px] text-slate-500 mt-1 font-medium leading-snug">Laporan harian & lapor cepat lapangan</p>
                    </div>
                 </button>
-                <button onClick={() => setView('survei')} className="bg-white p-5 rounded-[2rem] shadow-sm border border-slate-200 flex items-center gap-5 hover:border-slate-300 transition-all group active:scale-95">
-                   <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-[1.5rem] flex items-center justify-center group-hover:scale-110 transition-transform shrink-0"><Map strokeWidth={2.5} size={30}/></div>
+                <button onClick={() => { if(projects.length > 0 && !closestProject) setClosestProject(projects[0]); setView('survei'); }} className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 flex items-center gap-5 hover:border-slate-300 transition-all group active:scale-95">
+                   <div className="w-[72px] h-[72px] bg-indigo-50 text-indigo-600 rounded-[1.5rem] flex items-center justify-center group-hover:scale-110 transition-transform shrink-0"><Map strokeWidth={2.5} size={34}/></div>
                    <div className="text-left flex-1">
-                      <h3 className="font-normal text-slate-800 text-[20px] tracking-tight">Input Survei</h3>
-                      <p className="text-[12px] text-slate-500 mt-1 font-medium leading-snug">Catat rute & data ukur lapangan</p>
+                      <h3 className="font-normal text-slate-800 text-[22px] tracking-tight">Input Survei</h3>
+                      <p className="text-[13px] text-slate-500 mt-1 font-medium leading-snug">Catat rute & data ukur lapangan</p>
                    </div>
                 </button>
-                {/* TOMBOL BARU UPDATE RUTE */}
-                <button onClick={() => setView('rute_gps')} className="bg-white p-5 rounded-[2rem] shadow-sm border border-slate-200 flex items-center gap-5 hover:border-amber-300 transition-all group active:scale-95 border-l-4 border-l-amber-500 relative overflow-hidden">
-                   <div className="absolute top-0 right-0 p-1.5 px-3 bg-amber-100 text-amber-700 text-[9px] font-black tracking-widest rounded-bl-xl uppercase">Map/Peta</div>
-                   <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-[1.5rem] flex items-center justify-center group-hover:scale-110 transition-transform shrink-0"><Navigation strokeWidth={2.5} size={30}/></div>
-                   <div className="text-left flex-1">
-                      <h3 className="font-normal text-slate-800 text-[20px] tracking-tight">Update Rute (GPS)</h3>
-                      <p className="text-[12px] text-slate-500 mt-1 font-medium leading-snug">Sinkronisasi rute aktual & rencana</p>
-                   </div>
-                </button>
-             </div>
-          </div>
-        )}
-
-        {/* --- VIEW BARU: UPDATE RUTE GPS (MODAL-LIKE VIEW) --- */}
-        {view === 'rute_gps' && (
-          <div className="flex-1 flex flex-col bg-slate-50 relative h-full overflow-hidden animate-in slide-in-from-right-4 duration-200">
-             
-             {/* Header */}
-             <div className="p-4 border-b border-slate-200 bg-white flex items-center gap-4 shrink-0 shadow-sm z-10">
-                <button onClick={() => setView('home')} className="p-2 bg-[#131219] text-white rounded-full hover:bg-[#201f29] active:scale-95 transition-all shadow-sm shadow-[#131219]/20"><ChevronLeft size={20}/></button>
-                <div className="flex-1 min-w-0">
-                  <h2 className="font-bold text-slate-800 text-lg truncate flex items-center gap-2">
-                    <Navigation size={18} className="text-amber-500" /> Update Rute
-                  </h2>
-                </div>
-             </div>
-             
-             {/* Tab Tipe Jalur */}
-             <div className="px-5 pt-5 shrink-0 relative z-10 bg-slate-50">
-                <label className="text-[10px] font-bold block mb-2 uppercase text-slate-500 text-center">Pilih Tipe Jalur Pada Peta</label>
-                <div className="flex bg-slate-200/80 p-1.5 rounded-2xl shadow-inner">
-                   <button onClick={() => setRuteForm({...ruteForm, type: 'realisasi', segmentName: ''})} className={`flex-1 py-3 text-[11px] font-black uppercase tracking-wider rounded-xl transition-all shadow-sm ${ruteForm.type === 'realisasi' ? 'bg-white text-emerald-600 border border-emerald-100' : 'text-slate-500 hover:text-slate-700 bg-transparent shadow-none border-transparent'}`}>
-                      Aktual (Realisasi)
-                   </button>
-                   <button onClick={() => setRuteForm({...ruteForm, type: 'sketsa', segmentName: ''})} className={`flex-1 py-3 text-[11px] font-black uppercase tracking-wider rounded-xl transition-all shadow-sm ${ruteForm.type === 'sketsa' ? 'bg-white text-amber-500 border border-amber-100' : 'text-slate-500 hover:text-slate-700 bg-transparent shadow-none border-transparent'}`}>
-                      Rencana (Sketsa)
-                   </button>
-                </div>
-             </div>
-
-             <div className="flex-1 overflow-y-auto p-4 md:p-5 custom-scrollbar bg-slate-50 overflow-x-hidden">
-                <form onSubmit={handleRuteSubmit} className="space-y-4 text-left pb-10 animate-in fade-in w-full">
-                  
-                  {/* Pilihan Proyek & Segmen */}
-                  <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm w-full space-y-4">
-                    <SurveyInputRow label="Pilih Proyek">
-                      <select 
-                         className="w-full p-3.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 text-sm font-bold outline-none focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 shadow-inner"
-                         value={closestProject?.id || ''}
-                         onChange={(e) => setClosestProject(projects.find(p => p.id === e.target.value))}
-                      >
-                         <option value="" disabled>Pilih Proyek...</option>
-                         {projects.map(p => <option key={p.id} value={p.id}>{p.pekerjaan}</option>)}
-                      </select>
-                    </SurveyInputRow>
-
-                    {closestProject && (
-                      <SurveyInputRow label="Pilih Segmen / Ruas">
-                        <select 
-                           className="w-full p-3.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 text-sm font-bold outline-none focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 shadow-inner mb-2"
-                           value={ruteForm.segmentName}
-                           onChange={(e) => setRuteForm({...ruteForm, segmentName: e.target.value})}
-                        >
-                           <option value="" disabled>Pilih Segmen yang Tersedia...</option>
-                           {existingSegments.map((name, idx) => <option key={idx} value={name}>{name}</option>)}
-                           <option value="NEW" className="text-blue-600 font-black">+ Buat Segmen Baru</option>
-                        </select>
-
-                        {ruteForm.segmentName === 'NEW' && (
-                           <div className="animate-in slide-in-from-top-1 fade-in mt-2">
-                             <input 
-                               type="text" 
-                               placeholder="Ketik Nama Segmen Baru..." 
-                               value={ruteForm.newSegmentName}
-                               onChange={(e) => setRuteForm({...ruteForm, newSegmentName: e.target.value})}
-                               className="w-full p-3.5 rounded-xl border border-blue-200 bg-blue-50 text-blue-900 text-sm font-bold outline-none focus:bg-white focus:border-blue-500 shadow-inner"
-                               autoFocus
-                             />
-                           </div>
-                        )}
-                      </SurveyInputRow>
-                    )}
-                  </div>
-
-                  {/* Koordinat GPS (Support Manual / Auto) */}
-                  <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm w-full space-y-4 relative overflow-hidden">
-                    <div className="absolute top-0 left-0 w-1.5 h-full bg-amber-400"></div>
-                    <SurveyInputRow label="Titik Koordinat (Bisa Diketik Manual)">
-                      <div className="flex gap-2 w-full mb-3">
-                        <div className="flex-1 min-w-0 bg-slate-100 rounded-xl p-3 border border-slate-200 focus-within:border-amber-400 focus-within:ring-1 focus-within:ring-amber-400 transition-all">
-                           <span className="text-[9px] text-slate-400 font-bold uppercase block mb-1">LATITUDE</span>
-                           <input 
-                              type="text" 
-                              value={ruteForm.lat} 
-                              onChange={(e) => setRuteForm(p => ({ ...p, lat: e.target.value }))}
-                              placeholder="-0.000000" 
-                              className="w-full bg-transparent outline-none text-sm font-black text-slate-800" 
-                           />
-                        </div>
-                        <div className="flex-1 min-w-0 bg-slate-100 rounded-xl p-3 border border-slate-200 focus-within:border-amber-400 focus-within:ring-1 focus-within:ring-amber-400 transition-all">
-                           <span className="text-[9px] text-slate-400 font-bold uppercase block mb-1">LONGITUDE</span>
-                           <input 
-                              type="text" 
-                              value={ruteForm.lng} 
-                              onChange={(e) => setRuteForm(p => ({ ...p, lng: e.target.value }))}
-                              placeholder="115.000000" 
-                              className="w-full bg-transparent outline-none text-sm font-black text-slate-800" 
-                           />
-                        </div>
-                      </div>
-                      <button 
-                        type="button" 
-                        onClick={() => getUnifiedGPS('rute')} 
-                        className="w-full py-3.5 bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors font-black rounded-xl text-xs uppercase tracking-widest flex justify-center items-center gap-2 border border-amber-200 shadow-sm"
-                      >
-                         <MapPin size={16} /> Ambil Lokasi Otomatis (GPS)
-                      </button>
-                    </SurveyInputRow>
-                  </div>
-
-                  {/* Catatan & Dokumentasi Gambar Grid */}
-                  <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm w-full space-y-4">
-                    <SurveyInputRow label="Catatan Tambahan / Kendala">
-                      <textarea 
-                        rows="3" 
-                        value={ruteForm.notes} 
-                        onChange={e => setRuteForm(p => ({ ...p, notes: e.target.value }))} 
-                        placeholder="Misal: Posisi berada di depan tiang listrik..." 
-                        className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 text-xs font-normal shadow-inner resize-y leading-relaxed text-slate-800"
-                      ></textarea>
-                    </SurveyInputRow>
-
-                    <SurveyInputRow label="Upload Foto Lapangan (Akan Dikompresi)">
-                      {ruteFiles.length > 0 && (
-                        <div className="grid grid-cols-3 gap-2 mb-3">
-                           {ruteFiles.map((file, idx) => (
-                              <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 bg-slate-100 group shadow-sm">
-                                 {file.type.startsWith('image/') ? (
-                                    <img src={URL.createObjectURL(file)} alt="prev" className="w-full h-full object-cover" />
-                                 ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-[8px] font-bold truncate px-1 text-slate-500">{file.name}</div>
-                                 )}
-                                 <button type="button" onClick={() => setRuteFiles(prev => prev.filter((_, i) => i !== idx))} className="absolute top-1 right-1 bg-rose-500 text-white p-1 rounded-md shadow-md active:scale-90"><Trash2 size={12} /></button>
-                              </div>
-                           ))}
-                        </div>
-                      )}
-
-                      <div className="bg-slate-50 p-3 border-2 border-dashed border-slate-300 rounded-xl flex items-center justify-center hover:bg-slate-100 transition-colors cursor-pointer relative overflow-hidden h-14">
-                        <input 
-                           type="file" multiple accept="image/*" 
-                           onChange={(e) => setRuteFiles(prev => [...prev, ...Array.from(e.target.files)])} 
-                           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
-                        />
-                        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 py-1 uppercase">
-                           <Camera size={16} className="text-amber-500" />
-                           <span>Pilih Foto/Gambar</span>
-                        </div>
-                      </div>
-                    </SurveyInputRow>
-                  </div>
-
-                  <button type="submit" disabled={isProcessing} className="w-full bg-[#131219] text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-xl hover:bg-[#201f29] shadow-[#131219]/30 active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-xs">
-                    {isProcessing ? <Loader2 size={16} className="animate-spin"/> : <Send size={16}/>}
-                    {isProcessing ? 'MENYIMPAN KE SERVER...' : 'SIMPAN TITIK RUTE'}
-                  </button>
-                </form>
              </div>
           </div>
         )}
@@ -1503,46 +1214,41 @@ export default function EmployeeApp() {
                 <button onClick={() => setView('home')} className="p-2 bg-[#131219] text-white rounded-full hover:bg-[#201f29] active:scale-95 transition-all shadow-sm shadow-[#131219]/20"><ChevronLeft size={20}/></button>
                 <div className="flex-1 min-w-0">
                   <h2 className="font-bold text-slate-800 text-lg truncate">Input Survei</h2>
+                  <select 
+                     className="w-full mt-1 bg-transparent border-none text-xs font-bold text-blue-600 outline-none truncate"
+                     value={closestProject?.id || ''}
+                     onChange={(e) => setClosestProject(projects.find(p => p.id === e.target.value))}
+                  >
+                     <option value="" disabled>Pilih Proyek...</option>
+                     {projects.map(p => <option key={p.id} value={p.id}>{p.pekerjaan}</option>)}
+                  </select>
                 </div>
              </div>
              
              {/* Tambahkan overflow-x-hidden untuk memastikan tidak ada elemen form yang membuat layar melar ke kanan */}
              <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 custom-scrollbar bg-white pb-10">
                 <form onSubmit={handleUnifiedSubmit} className="space-y-4 text-left w-full">
-                  <SurveyInputRow label="Pilih Proyek">
-                    <select 
-                       className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white transition-colors text-sm font-bold text-slate-800"
-                       value={closestProject?.id || ''}
-                       onChange={(e) => setClosestProject(projects.find(p => p.id === e.target.value))}
-                    >
-                       <option value="" disabled>Pilih Proyek...</option>
-                       {projects.map(p => <option key={p.id} value={p.id}>{p.pekerjaan}</option>)}
-                    </select>
-                  </SurveyInputRow>
-
                   <SurveyInputRow label="Tanggal">
                     <input type="date" value={uForm.tanggal} onChange={e => setUForm(p => ({ ...p, tanggal: e.target.value }))} className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white transition-colors" />
                   </SurveyInputRow>
                   
-                  <SurveyInputRow label="Nama Jln/Gg./Blok">
-                    <textarea rows="2" value={uForm.namaSegmen} onChange={e => setUForm(p => ({ ...p, namaSegmen: e.target.value }))} placeholder="Misal: Jl. Mawar / Segmen 1" className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white transition-colors resize-none leading-relaxed"></textarea>
+                  <SurveyInputRow label="Nama Segmen/Jalan">
+                    <textarea rows="2" value={uForm.namaSegmen} onChange={e => setUForm(p => ({ ...p, namaSegmen: e.target.value }))} placeholder="Misal: Jl. Mawar / Segmen 1 (Kosongkan = Segmen 1)" className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white transition-colors resize-none leading-relaxed"></textarea>
                   </SurveyInputRow>
                   
-                  {/* Gunakan min-w-0 pada input flex agar tidak overflow */}
-                  <SurveyInputRow label="Titik Awal">
+                  <SurveyInputRow label="Titik Awal Koordinat">
                     <div className="flex gap-2 w-full">
-                      <input type="text" placeholder="Lat" value={uForm.startLat} onChange={e => setUForm(p => ({ ...p, startLat: e.target.value }))} className="flex-1 min-w-0 p-2.5 text-xs rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white" />
-                      <input type="text" placeholder="Lng" value={uForm.startLng} onChange={e => setUForm(p => ({ ...p, startLng: e.target.value }))} className="flex-1 min-w-0 p-2.5 text-xs rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white" />
-                      <button type="button" onClick={() => getUnifiedGPS('start')} className="shrink-0 px-3 bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors font-bold rounded-xl text-[10px] shadow-sm">GPS</button>
+                      <input type="text" placeholder="Lat" value={uForm.points[0].lat} onChange={e => handleCoordChange(0, 'lat', e.target.value)} className="flex-1 min-w-0 p-2.5 text-xs rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white" />
+                      <input type="text" placeholder="Lng" value={uForm.points[0].lng} onChange={e => handleCoordChange(0, 'lng', e.target.value)} className="flex-1 min-w-0 p-2.5 text-xs rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white" />
+                      <button type="button" onClick={() => getUnifiedGPS(0)} className="shrink-0 px-3 bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors font-bold rounded-xl text-[10px] shadow-sm">Ambil GPS</button>
                     </div>
                   </SurveyInputRow>
                   
-                  {/* Gunakan min-w-0 pada input flex agar tidak overflow */}
-                  <SurveyInputRow label="Titik Akhir">
+                  <SurveyInputRow label="Titik Akhir Koordinat">
                     <div className="flex gap-2 w-full">
-                      <input type="text" placeholder="Lat" value={uForm.endLat} onChange={e => setUForm(p => ({ ...p, endLat: e.target.value }))} className="flex-1 min-w-0 p-2.5 text-xs rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white" />
-                      <input type="text" placeholder="Lng" value={uForm.endLng} onChange={e => setUForm(p => ({ ...p, endLng: e.target.value }))} className="flex-1 min-w-0 p-2.5 text-xs rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white" />
-                      <button type="button" onClick={() => getUnifiedGPS('end')} className="shrink-0 px-3 bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors font-bold rounded-xl text-[10px] shadow-sm">GPS</button>
+                      <input type="text" placeholder="Lat" value={uForm.points[1].lat} onChange={e => handleCoordChange(1, 'lat', e.target.value)} className="flex-1 min-w-0 p-2.5 text-xs rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white" />
+                      <input type="text" placeholder="Lng" value={uForm.points[1].lng} onChange={e => handleCoordChange(1, 'lng', e.target.value)} className="flex-1 min-w-0 p-2.5 text-xs rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white" />
+                      <button type="button" onClick={() => getUnifiedGPS(1)} className="shrink-0 px-3 bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors font-bold rounded-xl text-[10px] shadow-sm">Ambil GPS</button>
                     </div>
                   </SurveyInputRow>
                   
@@ -1555,18 +1261,18 @@ export default function EmployeeApp() {
                   </SurveyInputRow>
                   
                   <SurveyInputRow label="Jenis/Model Eks.">
-                    <input type="text" value={uForm.jenis_model_awal} onChange={e => setUForm(p => ({ ...p, jenis_model_awal: e.target.value }))} className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white" />
+                    <input type="text" placeholder="Misal: U-Ditch" value={uForm.jenis_model_awal} onChange={e => setUForm(p => ({ ...p, jenis_model_awal: e.target.value }))} className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white" />
                   </SurveyInputRow>
                   
                   <SurveyInputRow label="Upload Data Ukur (CSV)">
                     <input type="file" accept=".csv" onChange={e => setUDataUkur(e.target.files[0])} className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-600 hover:file:bg-blue-100" />
                   </SurveyInputRow>
                   
-                  <SurveyInputRow label="Catatan - Kendala - Kondisi">
+                  <SurveyInputRow label="Catatan / Kondisi">
                     <textarea rows="3" value={uForm.noteDesc} onChange={e => setUForm(p => ({ ...p, noteDesc: e.target.value }))} className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-blue-400 focus:bg-white"></textarea>
                   </SurveyInputRow>
                   
-                  <SurveyInputRow label="Dokumentasi Eks.">
+                  <SurveyInputRow label="Dokumentasi Eks. (Maks 5)">
                     <input type="file" multiple accept="image/*,video/*" onChange={e => {
                       const files = Array.from(e.target.files);
                       if (files.length > 5) { showMsg("Maksimal 5 file.", "error"); setUMedia(files.slice(0, 5)); } 
@@ -1614,7 +1320,6 @@ export default function EmployeeApp() {
                             <div className="animate-in fade-in slide-in-from-top-2 border-t border-slate-100 pt-6">
                                <label className="text-[10px] font-normal text-slate-500 uppercase ml-1 block mb-2">Pilih Nama Proyek</label>
                                <select className="w-full p-3.5 rounded-xl bg-slate-50 border border-slate-200 outline-none text-sm font-normal focus:border-emerald-500" value={closestProject?.id || ''} onChange={(e) => setClosestProject(projects.find(p => p.id === e.target.value))}>
-                                  <option value="" disabled>Pilih Proyek...</option>
                                   {projects.map(p => <option key={p.id} value={p.id}>{p.pekerjaan}</option>)}
                                </select>
                             </div>
@@ -1709,6 +1414,14 @@ export default function EmployeeApp() {
                 <button onClick={() => setView('home')} className="p-2 bg-[#131219] text-white rounded-full hover:bg-[#201f29] active:scale-95 transition-all shadow-sm shadow-[#131219]/20"><ChevronLeft size={20}/></button>
                 <div className="flex-1 min-w-0">
                   <h2 className="font-bold text-slate-800 text-lg truncate">Buat Laporan</h2>
+                  <select 
+                     className="w-full mt-0.5 bg-transparent border-none text-xs font-bold text-blue-600 outline-none truncate"
+                     value={closestProject?.id || ''}
+                     onChange={(e) => setClosestProject(projects.find(p => p.id === e.target.value))}
+                  >
+                     <option value="" disabled>Pilih Proyek...</option>
+                     {projects.map(p => <option key={p.id} value={p.id}>{p.pekerjaan}</option>)}
+                  </select>
                 </div>
              </div>
              
@@ -1736,18 +1449,7 @@ export default function EmployeeApp() {
                        A. Informasi & Jam Kerja
                     </h4>
                     <div>
-                      <label className="text-[10px] font-bold block mb-1.5 uppercase text-slate-600">Pilih Proyek / Pekerjaan</label>
-                      <select 
-                         className="w-full p-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-800 text-xs font-bold outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 shadow-inner"
-                         value={closestProject?.id || ''}
-                         onChange={(e) => setClosestProject(projects.find(p => p.id === e.target.value))}
-                      >
-                         <option value="" disabled>Pilih Proyek yang Sedang Dikerjakan...</option>
-                         {projects.map(p => <option key={p.id} value={p.id}>{p.pekerjaan}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold block mb-1.5 uppercase text-slate-600">Lokasi Pekerjaan Detail</label>
+                      <label className="text-[10px] font-bold block mb-1.5 uppercase text-slate-600">Lokasi Pekerjaan</label>
                       <textarea rows="2" value={dailyReportForm.lokasi} onChange={e => setDailyReportForm(p => ({ ...p, lokasi: e.target.value }))} placeholder="Ketik nama jalan atau lokasi lengkap..." className="w-full p-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-800 text-xs font-bold outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 shadow-inner resize-y leading-relaxed break-words"></textarea>
                     </div>
                     <div>
@@ -2014,19 +1716,6 @@ export default function EmployeeApp() {
 
                 {laporTab === 'lapangan' && (
                   <form onSubmit={handleLaporLapanganSubmit} className="space-y-4 text-left pb-10 animate-in fade-in slide-in-from-bottom-2 w-full">
-                    <div className="bg-white p-4 md:p-5 rounded-2xl border border-slate-200 shadow-sm w-full">
-                      <h4 className="text-sm font-black uppercase text-slate-700 mb-3 border-b border-slate-100 pb-2 tracking-widest flex items-center gap-2">
-                         <MapPin size={16} className="text-emerald-500" /> Pilih Proyek
-                      </h4>
-                      <select 
-                         className="w-full p-2.5 mb-1 rounded-lg border border-slate-200 bg-slate-50 text-slate-800 text-xs font-bold outline-none focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 shadow-inner"
-                         value={closestProject?.id || ''}
-                         onChange={(e) => setClosestProject(projects.find(p => p.id === e.target.value))}
-                      >
-                         <option value="" disabled>Pilih Proyek...</option>
-                         {projects.map(p => <option key={p.id} value={p.id}>{p.pekerjaan}</option>)}
-                      </select>
-                    </div>
                     <div className="bg-white p-4 md:p-5 rounded-2xl border border-slate-200 shadow-sm w-full">
                       <h4 className="text-sm font-black uppercase text-slate-700 mb-3 border-b border-slate-100 pb-2 tracking-widest flex items-center gap-2">
                          <Camera size={16} className="text-emerald-500" /> Dokumentasi Lapangan
